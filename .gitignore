@@ -1,0 +1,41 @@
+# Compiled files
+target/
+*.class
+
+# IDE files
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+.vscode/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+logs/
+
+# Application specific
+application-local.properties
+application-dev.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Docker
+*.pid
+
+# Sensitive data (important!)
+src/main/resources/application.properties
+src/main/resources/application.yml
+
+# But keep a sample config (we'll create one)
+!src/main/resources/application-sample.properties
