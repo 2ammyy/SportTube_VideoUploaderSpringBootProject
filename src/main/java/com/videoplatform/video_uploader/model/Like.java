@@ -19,10 +19,10 @@ public class Like {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(name = "video_id", nullable = false)
     private UUID videoId;
 
-    @Column(nullable = false)
+    @Column(name = "user_id", nullable = false)
     private UUID userId;
 
     private boolean isLike; // true = like, false = dislike

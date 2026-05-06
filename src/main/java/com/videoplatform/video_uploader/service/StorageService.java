@@ -1,102 +1,89 @@
 package com.videoplatform.video_uploader.service;
 
-import io.minio.*;
-import io.minio.http.Method;
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.*;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class StorageService {
 
-    private final MinioClient minioClient;
+    private final Path tempLocation = Paths.get("uploads/temp");
+    private final Path permanentLocation = Paths.get("uploads/videos");
+    private final Path thumbnailLocation = Paths.get("uploads/thumbnails");
 
-    @Value("${minio.bucket-name}")
-    private String bucketName;
+    @PostConstruct
+    public void init() throws IOException {
+        Files.createDirectories(tempLocation);
+        Files.createDirectories(permanentLocation);
+        Files.createDirectories(thumbnailLocation);
+        log.info("Storage directories initialized at: {}", Paths.get("uploads").toAbsolutePath());
+    }
 
-    public String uploadTemp(MultipartFile file) throws Exception {
-        // Ensure bucket exists
-        boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
-        if (!found) {
-            minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
-            log.info("Created bucket: {}", bucketName);
+    public String uploadTemp(MultipartFile file) throws IOException {
+        String filename = UUID.randomUUID() + "_" + sanitizeFilename(file.getOriginalFilename());
+        Path target = tempLocation.resolve(filename);
+        Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+        log.info("Uploaded temp file: {}", target.toAbsolutePath());
+        return target.toString();
+    }
+
+    public InputStream download(String path) throws IOException {
+        return Files.newInputStream(Paths.get(path));
+    }
+
+    public String moveToPermanent(String tempPath, String videoId) throws IOException {
+        Path source = Paths.get(tempPath);
+        if (!Files.exists(source)) {
+            log.error("Source file not found: {}", tempPath);
+            return tempPath;
         }
 
-        String objectName = "temp/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
-
-        minioClient.putObject(PutObjectArgs.builder()
-                .bucket(bucketName)
-                .object(objectName)
-                .stream(file.getInputStream(), file.getSize(), -1)
-                .contentType(file.getContentType())
-                .build());
-
-        log.info("Uploaded temp file: {}", objectName);
-        return objectName;
+        String filename = source.getFileName().toString();
+        Path videoDir = permanentLocation.resolve(videoId);
+        Files.createDirectories(videoDir);
+        Path target = videoDir.resolve(filename);
+        Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        log.info("Moved to permanent: {}", target.toAbsolutePath());
+        return target.toString();
     }
 
-    public InputStream download(String path) throws Exception {
-        return minioClient.getObject(GetObjectArgs.builder()
-                .bucket(bucketName)
-                .object(path)
-                .build());
+    public void uploadThumbnail(String path, byte[] data) throws IOException {
+        Path target = thumbnailLocation.resolve(path);
+        Files.createDirectories(target.getParent());
+        Files.write(target, data);
+        log.info("Uploaded thumbnail: {}", target.toAbsolutePath());
     }
 
-    public String moveToPermanent(String tempPath, String videoId) throws Exception {
-        String permanentPath = "videos/" + videoId + "/" + tempPath.substring(tempPath.lastIndexOf("_") + 1);
-
-        // Copy object
-        minioClient.copyObject(CopyObjectArgs.builder()
-                .bucket(bucketName)
-                .object(permanentPath)
-                .source(CopySource.builder()
-                        .bucket(bucketName)
-                        .object(tempPath)
-                        .build())
-                .build());
-
-        // Delete temp
-        minioClient.removeObject(RemoveObjectArgs.builder()
-                .bucket(bucketName)
-                .object(tempPath)
-                .build());
-
-        log.info("Moved to permanent: {}", permanentPath);
-        return permanentPath;
-    }
-
-    // ADD THIS METHOD - for uploading thumbnails
-    public void uploadThumbnail(String path, byte[] data) throws Exception {
-        minioClient.putObject(PutObjectArgs.builder()
-                .bucket(bucketName)
-                .object(path)
-                .stream(new ByteArrayInputStream(data), data.length, -1)
-                .contentType("image/png")
-                .build());
-        log.info("Uploaded thumbnail: {}", path);
-    }
-
-    // ADD THIS METHOD - for getting video stream URL
     public String getVideoUrl(String videoPath) {
-        try {
-            return minioClient.getPresignedObjectUrl(
-                    GetPresignedObjectUrlArgs.builder()
-                            .bucket(bucketName)
-                            .object(videoPath)
-                            .method(Method.GET)
-                            .expiry(60 * 60) // 1 hour
-                            .build()
-            );
-        } catch (Exception e) {
-            log.error("Error generating URL: {}", e.getMessage());
-            return null;
+        // Extract just the filename for streaming
+        Path path = Paths.get(videoPath);
+        return "/api/videos/stream/" + path.getFileName().toString();
+    }
+
+    public String getUploadDir() {
+        return Paths.get("uploads").toAbsolutePath().toString();
+    }
+
+    private String sanitizeFilename(String filename) {
+        if (filename == null) return "unknown";
+        // Remove any path traversal characters
+        String sanitized = filename.replaceAll("[^a-zA-Z0-9.-]", "_");
+        // Ensure it's not too long
+        if (sanitized.length() > 100) {
+            String extension = "";
+            int dotIndex = sanitized.lastIndexOf('.');
+            if (dotIndex > 0) {
+                extension = sanitized.substring(dotIndex);
+                sanitized = sanitized.substring(0, 97);
+            }
+            sanitized = sanitized.substring(0, Math.min(97, sanitized.length())) + extension;
         }
+        return sanitized;
     }
 }

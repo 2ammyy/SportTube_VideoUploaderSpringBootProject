@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - VideoStream</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #141414 0%, #1a1a1a 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-container {
+            width: 90%;
+            max-width: 450px;
+            background: rgba(0,0,0,0.85);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .brand {
+            text-align: center;
+            font-size: 36px;
+            font-weight: bold;
+            color: #e50914;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-title {
+            font-size: 24px;
+            margin-bottom: 25px;
+            color: #fff;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 15px;
+            background: #333;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #e50914;
+            background: #444;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #e50914;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #ff1a1a;
+            transform: translateY(-2px);
+        }
+
+        .switch-form {
+            text-align: center;
+            margin-top: 20px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .switch-form a {
+            color: #e50914;
+            text-decoration: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .switch-form a:hover {
+            text-decoration: underline;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            z-index: 3000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success { background: #4caf50; }
+        .toast.error { background: #f44336; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="brand">VIDEOSTREAM</div>
+        <div class="subtitle">Watch anywhere. Upload anytime.</div>
+
+        <!-- Login Form -->
+        <div id="loginForm">
+            <div class="form-title">Login</div>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="loginUsername" placeholder="Enter username">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter password">
+            </div>
+            <button class="btn btn-primary" onclick="login()">Sign In</button>
+            <div class="switch-form">
+                Don't have an account? <a onclick="showRegister()">Sign up now</a>
+            </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="hidden">
+            <div class="form-title">Create Account</div>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="regUsername" placeholder="Choose username">
+            </div>
+            <div class="input-group">
+                <label>Email</label>
+                <input type="email" id="regEmail" placeholder="Enter email">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="regPassword" placeholder="Create password">
+            </div>
+            <button class="btn btn-primary" onclick="register()">Sign Up</button>
+            <div class="switch-form">
+                Already have an account? <a onclick="showLogin()">Sign in</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+
+        function showRegister() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('currentUser', JSON.stringify({ username, id: data.userId }));
+                    showToast('Login successful!', 'success');
+                    setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+                } else {
+                    const error = await response.text();
+                    showToast('Login failed: ' + error, 'error');
+                }
+            } catch (error) {
+                showToast('Login error', 'error');
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                if (response.ok) {
+                    showToast('Registration successful! Please login.', 'success');
+                    showLogin();
+                } else {
+                    const error = await response.text();
+                    showToast('Registration failed: ' + error, 'error');
+                }
+            } catch (error) {
+                showToast('Registration error', 'error');
+            }
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Allow Enter key to submit
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                if (!document.getElementById('registerForm').classList.contains('hidden')) {
+                    register();
+                } else {
+                    login();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -3,31 +3,42 @@ package com.videoplatform.video_uploader.controller;
 import com.videoplatform.video_uploader.dto.UploadResponse;
 import com.videoplatform.video_uploader.dto.VideoStatusResponse;
 import com.videoplatform.video_uploader.events.VideoUploadedEvent;
+import com.videoplatform.video_uploader.model.Comment;
+import com.videoplatform.video_uploader.model.Like;
 import com.videoplatform.video_uploader.model.Video;
+import com.videoplatform.video_uploader.repository.CommentRepository;
+import com.videoplatform.video_uploader.repository.LikeRepository;
 import com.videoplatform.video_uploader.repository.VideoRepository;
 import com.videoplatform.video_uploader.service.AuthService;
 import com.videoplatform.video_uploader.service.StorageService;
+import com.videoplatform.video_uploader.service.VideoProcessingService;
 import com.videoplatform.video_uploader.service.VideoService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.videoplatform.video_uploader.model.Comment;
-import com.videoplatform.video_uploader.model.Like;
-import com.videoplatform.video_uploader.repository.CommentRepository;
-import com.videoplatform.video_uploader.repository.LikeRepository;
-import com.videoplatform.video_uploader.service.VideoProcessingService;
-import org.springframework.web.bind.annotation.RequestHeader;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/videos")
 @RequiredArgsConstructor
+@Slf4j
 public class VideoController {
 
     private final VideoService videoService;
@@ -45,7 +56,7 @@ public class VideoController {
             @RequestParam("userId") UUID userId) {
 
         try {
-            // 1. Save temp file to MinIO
+            // 1. Save temp file to storage
             String tempPath = storageService.uploadTemp(file);
 
             // 2. Create database record
@@ -68,7 +79,7 @@ public class VideoController {
             ));
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Upload error: {}", e.getMessage());
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -97,7 +108,6 @@ public class VideoController {
         }
     }
 
-    // ADD THIS NEW ENDPOINT
     @GetMapping("/all")
     public ResponseEntity<List<Video>> getAllVideos() {
         try {
@@ -108,15 +118,8 @@ public class VideoController {
         }
     }
 
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<Video>> getVideosByUser(@PathVariable UUID userId) {
-        try {
-            List<Video> videos = videoRepository.findByUserId(userId);
-            return ResponseEntity.ok(videos);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
-    }
+    // ============ LIKES ENDPOINTS ============
+
     @PostMapping("/{id}/like")
     public ResponseEntity<?> likeVideo(@PathVariable UUID id, @RequestHeader("Authorization") String token) {
         try {
@@ -170,6 +173,8 @@ public class VideoController {
         return ResponseEntity.ok(Map.of("likes", likes, "dislikes", dislikes));
     }
 
+    // ============ COMMENTS ENDPOINTS ============
+
     @PostMapping("/{id}/comments")
     public ResponseEntity<?> addComment(@PathVariable UUID id, @RequestBody Map<String, String> request, @RequestHeader("Authorization") String token) {
         try {
@@ -191,14 +196,144 @@ public class VideoController {
         return ResponseEntity.ok(comments);
     }
 
-    @GetMapping("/{id}/stream")
-    public ResponseEntity<?> streamVideo(@PathVariable UUID id) {
+    // ============ STREAMING ENDPOINT ============
+
+    @GetMapping("/{id}/thumbnail")
+    public ResponseEntity<Resource> getThumbnail(@PathVariable UUID id) {
         try {
             Video video = videoService.getVideo(id);
-            String videoUrl = storageService.getVideoUrl(video.getStoragePath());
-            return ResponseEntity.ok(Map.of("url", videoUrl));
+            String thumbnailPath = video.getThumbnailPath();
+
+            if (thumbnailPath == null || thumbnailPath.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Path filePath = Paths.get(thumbnailPath);
+
+            // If thumbnail doesn't exist, try to find it
+            if (!Files.exists(filePath)) {
+                File thumbnailsDir = new File(storageService.getUploadDir() + "/thumbnails");
+                if (thumbnailsDir.exists()) {
+                    File[] files = thumbnailsDir.listFiles((dir, name) -> name.contains(id.toString()));
+                    if (files != null && files.length > 0) {
+                        filePath = files[0].toPath();
+                    }
+                }
+            }
+
+            if (!Files.exists(filePath)) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Resource resource = new UrlResource(filePath.toUri());
+
+            String contentType = Files.probeContentType(filePath);
+            if (contentType == null) {
+                contentType = "image/jpeg";
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                    .body(resource);
+
         } catch (Exception e) {
+            log.error("Error serving thumbnail: {}", e.getMessage());
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/{id}/stream")
+    public ResponseEntity<Resource> streamVideo(@PathVariable UUID id) {
+        try {
+            Video video = videoService.getVideo(id);
+            String storagePath = video.getStoragePath();
+
+            log.info("Streaming video - ID: {}, Storage path: {}", id, storagePath);
+
+            if (storagePath == null || storagePath.isEmpty()) {
+                log.error("Storage path is null or empty for video: {}", id);
+                return ResponseEntity.notFound().build();
+            }
+
+            Path filePath = Paths.get(storagePath);
+
+            // If the path doesn't exist, try to find it in the uploads directory
+            if (!Files.exists(filePath)) {
+                log.warn("File not found at: {}, searching in uploads directory...", filePath);
+
+                // Search in permanent location
+                Path searchPath = Paths.get("uploads/videos");
+                if (Files.exists(searchPath)) {
+                    try (var stream = Files.walk(searchPath)) {
+                        filePath = stream
+                                .filter(Files::isRegularFile)
+                                .filter(path -> path.toString().contains(video.getId().toString()))
+                                .findFirst()
+                                .orElse(null);
+
+                        if (filePath != null && Files.exists(filePath)) {
+                            log.info("Found video file at: {}", filePath);
+                        } else {
+                            log.error("Could not find video file for ID: {}", id);
+                            return ResponseEntity.notFound().build();
+                        }
+                    }
+                } else {
+                    log.error("Uploads directory not found");
+                    return ResponseEntity.notFound().build();
+                }
+            }
+
+            // Verify file exists and is readable
+            if (!Files.exists(filePath) || !Files.isReadable(filePath)) {
+                log.error("File not readable or does not exist: {}", filePath);
+                return ResponseEntity.notFound().build();
+            }
+
+            Resource resource = new UrlResource(filePath.toUri());
+
+            // Determine content type
+            String contentType = Files.probeContentType(filePath);
+            if (contentType == null) {
+                contentType = "video/mp4";
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                    .body(resource);
+
+        } catch (Exception e) {
+            log.error("Error streaming video: {}", e.getMessage(), e);
+            return ResponseEntity.notFound().build();
+        }
+    }
+    @GetMapping("/debug/files")
+    public ResponseEntity<?> listFiles() {
+        try {
+            Path uploadsDir = Paths.get("uploads");
+            if (!Files.exists(uploadsDir)) {
+                return ResponseEntity.ok(Map.of("error", "Uploads directory does not exist"));
+            }
+
+            List<Map<String, String>> files = new ArrayList<>();
+            try (var stream = Files.walk(uploadsDir)) {
+                stream.filter(Files::isRegularFile)
+                        .forEach(path -> {
+                            Map<String, String> fileInfo = new HashMap<>();
+                            fileInfo.put("path", path.toString());
+                            fileInfo.put("size", String.valueOf(path.toFile().length()));
+                            files.add(fileInfo);
+                        });
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "uploads_directory", uploadsDir.toAbsolutePath().toString(),
+                    "files", files
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(e.getMessage());
         }
     }
 }
