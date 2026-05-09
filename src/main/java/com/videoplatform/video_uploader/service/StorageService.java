@@ -16,13 +16,28 @@ public class StorageService {
     private final Path tempLocation = Paths.get("uploads/temp");
     private final Path permanentLocation = Paths.get("uploads/videos");
     private final Path thumbnailLocation = Paths.get("uploads/thumbnails");
+    private final Path avatarLocation = Paths.get("uploads/avatars");
 
     @PostConstruct
     public void init() throws IOException {
         Files.createDirectories(tempLocation);
         Files.createDirectories(permanentLocation);
         Files.createDirectories(thumbnailLocation);
+        Files.createDirectories(avatarLocation);
         log.info("Storage directories initialized at: {}", Paths.get("uploads").toAbsolutePath());
+    }
+
+    public String uploadAvatar(MultipartFile file, UUID userId) throws IOException {
+        String ext = "jpg";
+        String original = file.getOriginalFilename();
+        if (original != null && original.contains(".")) {
+            ext = original.substring(original.lastIndexOf('.') + 1);
+        }
+        String filename = userId + "_avatar." + ext;
+        Path target = avatarLocation.resolve(filename);
+        Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+        log.info("Avatar saved: {}", target);
+        return target.toAbsolutePath().toString();
     }
 
     public String uploadTemp(MultipartFile file) throws IOException {

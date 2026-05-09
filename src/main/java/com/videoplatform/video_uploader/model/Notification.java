@@ -19,16 +19,16 @@ public class Notification {
     private UUID id;
 
     @Column(nullable = false, columnDefinition = "BINARY(16)")
-    private UUID userId;  // User who receives the notification
+    private UUID userId;
 
     @Column(nullable = false, columnDefinition = "BINARY(16)")
-    private UUID triggeredBy;  // User who triggered the action
+    private UUID triggeredBy;
 
     @Column(nullable = false, length = 50)
-    private String type;  // SUBSCRIBE, VIDEO_UPLOAD, LIKE, COMMENT
+    private String type;
 
     @Column(nullable = false, columnDefinition = "BINARY(16)")
-    private UUID videoId;  // Related video (if any)
+    private UUID videoId;
 
     @Column(length = 500)
     private String message;

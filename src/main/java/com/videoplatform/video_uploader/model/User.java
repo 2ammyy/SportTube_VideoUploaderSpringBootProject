@@ -30,6 +30,9 @@ public class User {
 
     private String avatarColor;
 
+    @Column(length = 500)
+    private String avatarPath;
+
     private String role; // USER, ADMIN
 
     @Column(updatable = false)

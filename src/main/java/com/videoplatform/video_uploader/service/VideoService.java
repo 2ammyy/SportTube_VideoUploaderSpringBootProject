@@ -19,12 +19,19 @@ public class VideoService {
     private final VideoRepository videoRepository;
 
     @Transactional
-    public Video create(UUID userId, String originalFilename, String tempPath) {
+    public Video create(UUID userId, String originalFilename, String tempPath, String title, String description, String privacy) {
         Video video = new Video();
         video.setUserId(userId);
         video.setOriginalFilename(originalFilename);
         video.setStoragePath(tempPath);
         video.setStatus(VideoStatus.PENDING_AI);
+        video.setTitle(title);
+        if (description != null && !description.isBlank()) {
+            video.setDescription(description);
+        }
+        if (privacy != null && !privacy.isBlank()) {
+            video.setPrivacy(privacy);
+        }
         return videoRepository.save(video);
     }
 
@@ -75,5 +82,14 @@ public class VideoService {
 
     public Video getVideo(UUID videoId) {
         return videoRepository.findById(videoId).orElseThrow();
+    }
+
+    @Transactional
+    public Video updateVideoSettings(UUID videoId, String title, String description, String privacy) {
+        Video video = videoRepository.findById(videoId).orElseThrow();
+        if (title != null) video.setTitle(title);
+        if (description != null) video.setDescription(description);
+        if (privacy != null) video.setPrivacy(privacy);
+        return videoRepository.save(video);
     }
 }

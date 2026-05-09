@@ -22,10 +22,10 @@ public class Report {
     private UUID videoId;
 
     @Column(nullable = false, columnDefinition = "BINARY(16)")
-    private UUID reporterId;  // User who reported
+    private UUID reporterId;
 
     @Column(nullable = false, length = 50)
-    private String reason;  // SPAM, INAPPROPRIATE, COPYRIGHT, OTHER
+    private String reason;
 
     @Column(columnDefinition = "TEXT")
     private String description;

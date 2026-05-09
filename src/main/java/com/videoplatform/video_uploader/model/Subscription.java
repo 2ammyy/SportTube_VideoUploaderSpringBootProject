@@ -19,10 +19,10 @@ public class Subscription {
     private UUID id;
 
     @Column(nullable = false, columnDefinition = "BINARY(16)")
-    private UUID subscriberId;  // User who subscribes
+    private UUID subscriberId;
 
     @Column(nullable = false, columnDefinition = "BINARY(16)")
-    private UUID channelId;     // Channel being subscribed to
+    private UUID channelId;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

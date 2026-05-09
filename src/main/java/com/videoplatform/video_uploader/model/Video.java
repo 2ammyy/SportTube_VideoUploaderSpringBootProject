@@ -23,6 +23,15 @@ public class Video {
     @Column(nullable = false, length = 255)
     private String originalFilename;
 
+    @Column(length = 255)
+    private String title;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(length = 20)
+    private String privacy = "public";
+
     @Column(length = 500)
     private String storagePath;
 

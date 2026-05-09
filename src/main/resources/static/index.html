@@ -11,7 +11,6 @@
 <nav class="navbar">
     <div class="nav-brand" onclick="location.reload()">VIDEOSTREAM</div>
     <div class="nav-search">
-        <!-- Hidden dummy fields to confuse browser autofill -->
         <input type="text" name="fakeuser" style="display:none" tabindex="-1">
         <input type="password" name="fakepass" style="display:none" tabindex="-1">
         <input type="search" id="searchInput" name="q-<?= Date.now() ?>" placeholder="🔍 Search videos..." onkeyup="searchVideos()" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="0">
@@ -20,12 +19,24 @@
         <a onclick="showCategory('all')">Home</a>
         <a onclick="showCategory('trending')">Trending</a>
         <a href="#" class="upload-btn-nav" onclick="openUploadModal()">+ Upload</a>
+        <div class="notification-bell" id="notificationBell" onclick="toggleNotifications()">
+            🔔
+            <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+        </div>
+        <div class="notifications-dropdown" id="notificationsDropdown">
+            <div class="notif-header">
+                <h4>Notifications</h4>
+                <a onclick="markAllNotificationsRead()" style="color: #e50914; cursor: pointer; font-size: 12px;">Mark all read</a>
+            </div>
+            <div id="notificationsList" style="max-height: 400px; overflow-y: auto;"></div>
+        </div>
         <div class="user-profile" onclick="toggleProfileDropdown()">
             <div class="user-avatar" id="userAvatar">👤</div>
             <span id="userName">Guest</span>
         </div>
         <div class="profile-dropdown" id="profileDropdown">
             <div style="padding: 10px 20px; border-bottom: 1px solid #333;" id="userEmail"></div>
+            <a onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
             <a onclick="logout()">🚪 Logout</a>
             <a onclick="location.href='login.html'">🔐 Login/Signup</a>
         </div>
@@ -42,9 +53,27 @@
 </div>
 
 <div class="container">
+    <div class="section" id="savedSection" style="display:none;">
+        <div class="section-header">
+            <h2 class="section-title">Saved Videos</h2>
+        </div>
+        <div id="savedContainer">
+            <div class="loading">Loading saved videos...</div>
+        </div>
+    </div>
+
+    <div class="section" id="historySection" style="display:none;">
+        <div class="section-header">
+            <h2 class="section-title">Watch History</h2>
+        </div>
+        <div id="historyContainer">
+            <div class="loading">Loading history...</div>
+        </div>
+    </div>
+
     <div class="section">
         <div class="section-header">
-            <h2 class="section-title" id="sectionTitle">🎬 All Videos</h2>
+            <h2 class="section-title" id="sectionTitle">All Videos</h2>
             <a href="#" class="section-link" onclick="refreshVideos()">↻ Refresh</a>
         </div>
         <div id="videosContainer">
@@ -61,7 +90,17 @@
             <source id="videoSource" src="" type="video/mp4">
         </video>
         <div class="player-info" id="playerInfo"></div>
-        <div class="interaction-section" id="interactionSection">
+        <div class="channel-info-bar">
+            <div class="channel-details">
+                <div class="channel-avatar" id="channelAvatar">👤</div>
+                <div>
+                    <div class="channel-name" id="channelName">Channel</div>
+                    <div class="subscriber-count" id="subscriberCount">0 subscribers</div>
+                </div>
+            </div>
+            <button class="subscribe-btn" id="subscribeBtn" onclick="subscribeChannel()">Subscribe</button>
+        </div>
+        <div class="video-actions">
             <div class="like-buttons">
                 <div class="like-btn" onclick="likeVideo()">
                     👍 <span id="likeCount">0</span>
@@ -70,6 +109,9 @@
                     👎 <span id="dislikeCount">0</span>
                 </div>
             </div>
+            <button class="report-btn" onclick="openReportModal()">🚩 Report</button>
+        </div>
+        <div class="interaction-section" id="interactionSection">
             <div class="comments-section">
                 <h4>💬 Comments</h4>
                 <div class="comment-input">
@@ -93,6 +135,18 @@
             <div style="font-size: 12px; color: #aaa; margin: 10px 0;">or</div>
             <button class="btn-primary" onclick="document.getElementById('fileInput').click()">Browse Files</button>
             <input type="file" id="fileInput" style="display: none;" accept="video/*,.mp4,.mov,.avi,.mkv">
+        </div>
+        <div style="padding: 0 20px 10px;">
+            <input type="text" id="uploadTitle" placeholder="Video title (required)" style="width:100%;padding:10px;margin-bottom:10px;border-radius:6px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:inherit;box-sizing:border-box;">
+            <textarea id="uploadDescription" rows="3" placeholder="Add a description (optional) — use @username to mention users" style="width:100%;padding:10px;border-radius:6px;border:1px solid #333;background:#1a1a2e;color:#fff;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>
+            <div style="margin-top:8px;display:flex;gap:10px;align-items:center;">
+                <label style="color:#aaa;font-size:13px;">Privacy:</label>
+                <select id="uploadPrivacy" style="padding:6px 10px;border-radius:4px;border:1px solid #333;background:#1a1a2e;color:#fff;">
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                    <option value="unlisted">Unlisted</option>
+                </select>
+            </div>
         </div>
         <div class="modal-buttons">
             <button class="btn-secondary" onclick="closeUploadModal()">Cancel</button>
@@ -130,6 +184,22 @@
     </div>
 </div>
 
-<script src="js/app.js"></script>
+<!-- Report Modal -->
+<div id="reportModal" class="auth-modal">
+    <span class="close-btn" onclick="closeReportModal()">&times;</span>
+    <div class="auth-modal-content">
+        <div class="auth-modal-header">🚩 Report Video</div>
+        <select id="reportReason" class="auth-input">
+            <option value="SPAM">Spam or misleading</option>
+            <option value="INAPPROPRIATE">Inappropriate content</option>
+            <option value="COPYRIGHT">Copyright infringement</option>
+            <option value="OTHER">Other</option>
+        </select>
+        <textarea id="reportDescription" class="auth-input" placeholder="Additional details..." rows="3" style="resize: vertical; min-height: 80px;"></textarea>
+        <button class="btn-primary" style="width: 100%;" onclick="submitReport()">Submit Report</button>
+    </div>
+</div>
+
+<script src="js/app.js?v=3"></script>
 </body>
 </html>

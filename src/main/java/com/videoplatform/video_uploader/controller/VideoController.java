@@ -5,10 +5,16 @@ import com.videoplatform.video_uploader.dto.VideoStatusResponse;
 import com.videoplatform.video_uploader.events.VideoUploadedEvent;
 import com.videoplatform.video_uploader.model.Comment;
 import com.videoplatform.video_uploader.model.Like;
+import com.videoplatform.video_uploader.model.SavedVideo;
+import com.videoplatform.video_uploader.model.User;
 import com.videoplatform.video_uploader.model.Video;
+import com.videoplatform.video_uploader.model.WatchHistory;
 import com.videoplatform.video_uploader.repository.CommentRepository;
 import com.videoplatform.video_uploader.repository.LikeRepository;
+import com.videoplatform.video_uploader.repository.SavedVideoRepository;
+import com.videoplatform.video_uploader.repository.UserRepository;
 import com.videoplatform.video_uploader.repository.VideoRepository;
+import com.videoplatform.video_uploader.repository.WatchHistoryRepository;
 import com.videoplatform.video_uploader.service.AuthService;
 import com.videoplatform.video_uploader.service.StorageService;
 import com.videoplatform.video_uploader.service.VideoProcessingService;
@@ -24,6 +30,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
+import java.time.LocalDateTime;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,18 +56,24 @@ public class VideoController {
     private final LikeRepository likeRepository;
     private final VideoProcessingService videoProcessingService;
     private final AuthService authService;
+    private final WatchHistoryRepository watchHistoryRepository;
+    private final SavedVideoRepository savedVideoRepository;
+    private final UserRepository userRepository;
 
     @PostMapping("/upload")
     public ResponseEntity<UploadResponse> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("userId") UUID userId) {
+            @RequestParam("title") String title,
+            @RequestParam("userId") UUID userId,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "privacy", required = false) String privacy) {
 
         try {
             // 1. Save temp file to storage
             String tempPath = storageService.uploadTemp(file);
 
             // 2. Create database record
-            Video video = videoService.create(userId, file.getOriginalFilename(), tempPath);
+            Video video = videoService.create(userId, file.getOriginalFilename(), tempPath, title, description, privacy);
 
             // 3. Send event to Kafka
             VideoUploadedEvent event = new VideoUploadedEvent(
@@ -108,11 +121,66 @@ public class VideoController {
         }
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<Video>> getAllVideos() {
+    @PutMapping("/{id}/settings")
+    public ResponseEntity<?> updateVideoSettings(
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> request,
+            @RequestHeader("Authorization") String token) {
         try {
-            List<Video> videos = videoRepository.findAll();
-            return ResponseEntity.ok(videos);
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            Video video = videoService.getVideo(id);
+            if (!video.getUserId().equals(userId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Not your video"));
+            }
+            Video updated = videoService.updateVideoSettings(
+                    id,
+                    request.get("title"),
+                    request.get("description"),
+                    request.get("privacy")
+            );
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> enrichVideo(Video v) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", v.getId());
+        map.put("title", v.getTitle());
+        map.put("originalFilename", v.getOriginalFilename());
+        map.put("description", v.getDescription());
+        map.put("userId", v.getUserId());
+        map.put("storagePath", v.getStoragePath());
+        map.put("thumbnailPath", v.getThumbnailPath());
+        map.put("status", v.getStatus() != null ? v.getStatus().name() : null);
+        map.put("createdAt", v.getCreatedAt());
+        map.put("aiLabel", v.getAiLabel());
+        map.put("privacy", v.getPrivacy());
+        User uploader = userRepository.findById(v.getUserId()).orElse(null);
+        map.put("username", uploader != null ? uploader.getUsername() : "Unknown");
+        map.put("avatarColor", uploader != null ? uploader.getAvatarColor() : "#667eea");
+        return map;
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<Map<String, Object>>> getAllVideos(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            UUID currentUserId = null;
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                try {
+                    currentUserId = authService.validateToken(authHeader.replace("Bearer ", ""));
+                } catch (Exception ignored) {}
+            }
+            List<Video> all = videoRepository.findAll();
+            UUID uid = currentUserId;
+            List<Video> filtered = all.stream()
+                    .filter(v -> v.getPrivacy() == null || v.getPrivacy().equals("public")
+                            || (uid != null && v.getUserId().equals(uid)))
+                    .collect(java.util.stream.Collectors.toList());
+            List<Map<String, Object>> result = filtered.stream().map(this::enrichVideo).collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
@@ -262,18 +330,25 @@ public class VideoController {
             if (!Files.exists(filePath)) {
                 log.warn("File not found at: {}, searching in uploads directory...", filePath);
 
-                // Search in permanent location
-                Path searchPath = Paths.get("uploads/videos");
+                // Search in temp location first, then permanent
+                Path searchPath = Paths.get("uploads");
                 if (Files.exists(searchPath)) {
                     try (var stream = Files.walk(searchPath)) {
+                        String originalFilename = video.getOriginalFilename();
+                        String videoIdStr = video.getId().toString();
                         filePath = stream
                                 .filter(Files::isRegularFile)
-                                .filter(path -> path.toString().contains(video.getId().toString()))
+                                .filter(path -> path.toString().contains(videoIdStr) || 
+                                        (originalFilename != null && path.getFileName().toString().contains(originalFilename.replace(" ", "_"))) ||
+                                        (originalFilename != null && path.getFileName().toString().contains(originalFilename)))
                                 .findFirst()
                                 .orElse(null);
 
                         if (filePath != null && Files.exists(filePath)) {
                             log.info("Found video file at: {}", filePath);
+                            // Update the database with the correct path
+                            video.setStoragePath(filePath.toString());
+                            videoService.updateProcessed(video.getId(), filePath.toString(), video.getThumbnailPath());
                         } else {
                             log.error("Could not find video file for ID: {}", id);
                             return ResponseEntity.notFound().build();
@@ -309,6 +384,169 @@ public class VideoController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    // ============ WATCH HISTORY ============
+
+    @PostMapping("/{id}/watch")
+    public ResponseEntity<?> recordWatch(@PathVariable UUID id, @RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            Video video = videoService.getVideo(id);
+            WatchHistory existing = watchHistoryRepository.findByUserIdAndVideoId(userId, id).orElse(null);
+            if (existing != null) {
+                existing.setWatchedAt(LocalDateTime.now());
+                watchHistoryRepository.save(existing);
+            } else {
+                WatchHistory wh = new WatchHistory();
+                wh.setUserId(userId);
+                wh.setVideoId(id);
+                wh.setVideoTitle(video.getTitle() != null ? video.getTitle() : video.getOriginalFilename());
+                watchHistoryRepository.save(wh);
+            }
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> enrichWatchHistory(WatchHistory wh) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", wh.getId());
+        map.put("userId", wh.getUserId());
+        map.put("videoId", wh.getVideoId());
+        map.put("videoTitle", wh.getVideoTitle());
+        map.put("watchedAt", wh.getWatchedAt());
+        Video video = videoRepository.findById(wh.getVideoId()).orElse(null);
+        if (video != null) {
+            map.put("thumbnailPath", video.getThumbnailPath());
+            map.put("uploaderUserId", video.getUserId());
+            User uploader = userRepository.findById(video.getUserId()).orElse(null);
+            map.put("username", uploader != null ? uploader.getUsername() : "Unknown");
+            map.put("avatarColor", uploader != null ? uploader.getAvatarColor() : "#667eea");
+        } else {
+            map.put("thumbnailPath", null);
+            map.put("uploaderUserId", null);
+            map.put("username", "Unknown");
+            map.put("avatarColor", "#667eea");
+        }
+        return map;
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<?> getHistory(@RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            List<WatchHistory> history = watchHistoryRepository.findByUserIdOrderByWatchedAtDesc(userId);
+            List<Map<String, Object>> result = history.stream().map(this::enrichWatchHistory).collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ============ SAVE / BOOKMARK ============
+
+    @PostMapping("/{id}/save")
+    public ResponseEntity<?> toggleSave(@PathVariable UUID id, @RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            Video video = videoService.getVideo(id);
+            boolean saved = savedVideoRepository.existsByUserIdAndVideoId(userId, id);
+            if (saved) {
+                savedVideoRepository.findByUserIdAndVideoId(userId, id).ifPresent(sv -> savedVideoRepository.delete(sv));
+                return ResponseEntity.ok(Map.of("saved", false));
+            } else {
+                SavedVideo sv = new SavedVideo();
+                sv.setUserId(userId);
+                sv.setVideoId(id);
+                sv.setVideoTitle(video.getTitle() != null ? video.getTitle() : video.getOriginalFilename());
+                savedVideoRepository.save(sv);
+                return ResponseEntity.ok(Map.of("saved", true));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> enrichSavedVideo(SavedVideo sv) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", sv.getId());
+        map.put("userId", sv.getUserId());
+        map.put("videoId", sv.getVideoId());
+        map.put("videoTitle", sv.getVideoTitle());
+        map.put("savedAt", sv.getSavedAt());
+        Video video = videoRepository.findById(sv.getVideoId()).orElse(null);
+        if (video != null) {
+            map.put("thumbnailPath", video.getThumbnailPath());
+            map.put("uploaderUserId", video.getUserId());
+            User uploader = userRepository.findById(video.getUserId()).orElse(null);
+            map.put("username", uploader != null ? uploader.getUsername() : "Unknown");
+            map.put("avatarColor", uploader != null ? uploader.getAvatarColor() : "#667eea");
+        } else {
+            map.put("thumbnailPath", null);
+            map.put("uploaderUserId", null);
+            map.put("username", "Unknown");
+            map.put("avatarColor", "#667eea");
+        }
+        return map;
+    }
+
+    @GetMapping("/saved")
+    public ResponseEntity<?> getSaved(@RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            List<SavedVideo> saved = savedVideoRepository.findByUserIdOrderBySavedAtDesc(userId);
+            List<Map<String, Object>> result = saved.stream().map(this::enrichSavedVideo).collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/is-saved")
+    public ResponseEntity<?> isSaved(@PathVariable UUID id, @RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            boolean saved = savedVideoRepository.existsByUserIdAndVideoId(userId, id);
+            return ResponseEntity.ok(Map.of("saved", saved));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("saved", false));
+        }
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getUserVideos(@PathVariable UUID userId) {
+        try {
+            List<Video> videos = videoRepository.findByUserId(userId);
+            List<Map<String, Object>> result = videos.stream().map(this::enrichVideo).collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteVideo(@PathVariable UUID id, @RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            Video video = videoService.getVideo(id);
+            if (!video.getUserId().equals(userId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Not your video"));
+            }
+            // Delete file from disk
+            if (video.getStoragePath() != null) {
+                try { Files.deleteIfExists(Paths.get(video.getStoragePath())); } catch (Exception ignored) {}
+            }
+            if (video.getThumbnailPath() != null) {
+                try { Files.deleteIfExists(Paths.get(video.getThumbnailPath())); } catch (Exception ignored) {}
+            }
+            videoRepository.delete(video);
+            return ResponseEntity.ok(Map.of("message", "Video deleted"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/debug/files")
     public ResponseEntity<?> listFiles() {
         try {
