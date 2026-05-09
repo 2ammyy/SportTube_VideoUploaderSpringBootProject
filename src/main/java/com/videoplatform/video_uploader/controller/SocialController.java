@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+// Rest of your SocialController class remains the same
+
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -32,7 +34,7 @@ public class SocialController {
     public ResponseEntity<?> subscribe(@PathVariable UUID channelId, @RequestHeader("Authorization") String token) {
         try {
             UUID userId = authService.validateToken(token.replace("Bearer ", ""));
-            
+
             if (userId.equals(channelId)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Cannot subscribe to yourself"));
             }
@@ -50,9 +52,7 @@ public class SocialController {
                 // Create notification for channel owner
                 Notification notif = new Notification();
                 notif.setUserId(channelId);
-                notif.setTriggeredBy(userId);
                 notif.setType("SUBSCRIBE");
-                notif.setVideoId(UUID.randomUUID()); // Dummy since no video
                 notif.setMessage("New subscriber!");
                 notificationRepository.save(notif);
 
@@ -137,7 +137,7 @@ public class SocialController {
     public ResponseEntity<?> reportVideo(@PathVariable UUID videoId, @RequestBody Map<String, String> request, @RequestHeader("Authorization") String token) {
         try {
             UUID userId = authService.validateToken(token.replace("Bearer ", ""));
-            
+
             if (reportRepository.existsByVideoIdAndReporterId(videoId, userId)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Already reported this video"));
             }

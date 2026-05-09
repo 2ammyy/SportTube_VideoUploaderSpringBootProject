@@ -1,20 +1,7 @@
 package com.videoplatform.video_uploader.controller;
 
-import com.videoplatform.video_uploader.dto.UploadResponse;
-import com.videoplatform.video_uploader.dto.VideoStatusResponse;
-import com.videoplatform.video_uploader.events.VideoUploadedEvent;
-import com.videoplatform.video_uploader.model.Comment;
-import com.videoplatform.video_uploader.model.Like;
-import com.videoplatform.video_uploader.model.SavedVideo;
-import com.videoplatform.video_uploader.model.User;
-import com.videoplatform.video_uploader.model.Video;
-import com.videoplatform.video_uploader.model.WatchHistory;
-import com.videoplatform.video_uploader.repository.CommentRepository;
-import com.videoplatform.video_uploader.repository.LikeRepository;
-import com.videoplatform.video_uploader.repository.SavedVideoRepository;
-import com.videoplatform.video_uploader.repository.UserRepository;
-import com.videoplatform.video_uploader.repository.VideoRepository;
-import com.videoplatform.video_uploader.repository.WatchHistoryRepository;
+import com.videoplatform.video_uploader.model.*;
+import com.videoplatform.video_uploader.repository.*;
 import com.videoplatform.video_uploader.service.AuthService;
 import com.videoplatform.video_uploader.service.StorageService;
 import com.videoplatform.video_uploader.service.VideoProcessingService;
@@ -29,18 +16,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.io.File;
 import java.time.LocalDateTime;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/videos")
@@ -59,6 +41,63 @@ public class VideoController {
     private final WatchHistoryRepository watchHistoryRepository;
     private final SavedVideoRepository savedVideoRepository;
     private final UserRepository userRepository;
+
+    // Inner class for upload response
+    public static class UploadResponse {
+        private final UUID videoId;
+        private final String status;
+        private final String message;
+
+        public UploadResponse(UUID videoId, String status, String message) {
+            this.videoId = videoId;
+            this.status = status;
+            this.message = message;
+        }
+
+        public UUID getVideoId() { return videoId; }
+        public String getStatus() { return status; }
+        public String getMessage() { return message; }
+    }
+
+    // Inner class for video status response
+    public static class VideoStatusResponse {
+        private final UUID videoId;
+        private final String status;
+        private final String aiLabel;
+        private final String rejectionReason;
+
+        public VideoStatusResponse(UUID videoId, String status, String aiLabel, String rejectionReason) {
+            this.videoId = videoId;
+            this.status = status;
+            this.aiLabel = aiLabel;
+            this.rejectionReason = rejectionReason;
+        }
+
+        public UUID getVideoId() { return videoId; }
+        public String getStatus() { return status; }
+        public String getAiLabel() { return aiLabel; }
+        public String getRejectionReason() { return rejectionReason; }
+    }
+
+    // Inner class for VideoUploadedEvent
+    public static class VideoUploadedEvent {
+        private final UUID videoId;
+        private final String storagePath;
+        private final long fileSize;
+        private final String contentType;
+
+        public VideoUploadedEvent(UUID videoId, String storagePath, long fileSize, String contentType) {
+            this.videoId = videoId;
+            this.storagePath = storagePath;
+            this.fileSize = fileSize;
+            this.contentType = contentType;
+        }
+
+        public UUID getVideoId() { return videoId; }
+        public String getStoragePath() { return storagePath; }
+        public long getFileSize() { return fileSize; }
+        public String getContentType() { return contentType; }
+    }
 
     @PostMapping("/upload")
     public ResponseEntity<UploadResponse> upload(
@@ -338,7 +377,7 @@ public class VideoController {
                         String videoIdStr = video.getId().toString();
                         filePath = stream
                                 .filter(Files::isRegularFile)
-                                .filter(path -> path.toString().contains(videoIdStr) || 
+                                .filter(path -> path.toString().contains(videoIdStr) ||
                                         (originalFilename != null && path.getFileName().toString().contains(originalFilename.replace(" ", "_"))) ||
                                         (originalFilename != null && path.getFileName().toString().contains(originalFilename)))
                                 .findFirst()
