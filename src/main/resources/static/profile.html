@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoStream - Profile</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="nav-brand" onclick="location.href='index.html'">VIDEOSTREAM</div>
+    <div class="nav-search">
+        <input type="text" name="fakeuser" style="display:none" tabindex="-1">
+        <input type="password" name="fakepass" style="display:none" tabindex="-1">
+        <input type="search" id="searchInput" placeholder="🔍 Search videos..." onkeyup="searchVideos()" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="0">
+    </div>
+    <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="#" onclick="openUploadModal()">+ Upload</a>
+        <div class="user-profile" onclick="toggleProfileDropdown()">
+            <div class="user-avatar" id="userAvatar">👤</div>
+            <span id="userName">Guest</span>
+        </div>
+        <div class="profile-dropdown" id="profileDropdown">
+            <div style="padding: 10px 20px; border-bottom: 1px solid #333;" id="userEmail"></div>
+            <a onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
+            <a onclick="logout()">🚪 Logout</a>
+            <a onclick="location.href='login.html'">🔐 Login/Signup</a>
+        </div>
+    </div>
+</nav>
+
+<div class="profile-header" id="profileHeader">
+    <div class="profile-avatar" id="profileAvatar">?</div>
+    <div class="profile-info">
+        <h1 id="profileUsername">Loading...</h1>
+        <p id="profileStats"></p>
+        <div class="profile-actions" id="profileActions"></div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Uploads</h2>
+        </div>
+        <div id="profileVideos">
+            <div class="loading">Loading videos...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Video Modal -->
+<div class="edit-modal" id="editVideoModal">
+    <div class="edit-modal-content">
+        <h2>Edit Video</h2>
+        <input type="hidden" id="editVideoId">
+        <input type="text" id="editVideoTitle" placeholder="Video title">
+        <textarea id="editVideoDescription" rows="4" placeholder="Description (use @username to mention users)"></textarea>
+        <select id="editVideoPrivacy" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #333;border-radius:6px;background:#16213e;color:#fff;">
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+            <option value="unlisted">Unlisted</option>
+        </select>
+        <div class="edit-modal-actions">
+            <button class="btn-edit-profile" onclick="closeEditVideo()">Cancel</button>
+            <button style="background:#e50914;color:#fff;padding:8px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;" onclick="saveEditVideo()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Avatar Color Picker Modal -->
+<div class="edit-modal" id="avatarColorModal">
+    <div class="edit-modal-content">
+        <h2>Choose Avatar Color</h2>
+        <div class="color-picker" id="colorPicker"></div>
+        <div class="edit-modal-actions">
+            <button class="btn-edit-profile" onclick="document.getElementById('avatarColorModal').classList.remove('show')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Account Settings Modal -->
+<div class="edit-modal" id="accountModal">
+    <div class="edit-modal-content">
+        <h2>Account Settings</h2>
+
+        <h3 style="color:#ccc;font-size:14px;margin:16px 0 8px;">Avatar Image</h3>
+        <div style="display:flex;align-items:center;gap:16px;">
+            <div class="profile-avatar" id="settingsAvatar" style="width:64px;height:64px;font-size:24px;">?</div>
+            <div>
+                <button class="btn-edit-profile" onclick="document.getElementById('avatarUploadInput').click()">Upload Photo</button>
+                <input type="file" id="avatarUploadInput" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
+                <p style="color:#888;font-size:11px;margin-top:4px;">Recommended: square image, max 2MB</p>
+            </div>
+        </div>
+
+        <h3 style="color:#ccc;font-size:14px;margin:16px 0 8px;">Change Password</h3>
+        <input type="password" id="oldPassword" class="auth-input" placeholder="Current password" style="margin-bottom:8px;">
+        <input type="password" id="newPassword" class="auth-input" placeholder="New password" style="margin-bottom:8px;">
+        <button class="btn-edit-profile" onclick="changePassword()">Update Password</button>
+
+        <h3 style="color:#ccc;font-size:14px;margin:20px 0 8px;">Danger Zone</h3>
+        <button style="background:#e50914;color:#fff;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;" onclick="deleteAccount()">Delete Account</button>
+        <p style="color:#888;font-size:11px;margin-top:4px;">This will permanently delete your account and all videos.</p>
+
+        <div class="edit-modal-actions">
+            <button class="btn-edit-profile" onclick="document.getElementById('accountModal').classList.remove('show')">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/app.js?v=3"></script>
+<script>
+const COLORS = ['#667eea','#e50914','#4caf50','#2196f3','#ff9800','#9c27b0','#f44336','#00bcd4','#e91e63','#3f51b5','#009688','#ff5722'];
+
+let profileUserId = null;
+let isOwnProfile = false;
+let profileVideos = [];
+
+function getQueryParam(name) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
+}
+
+async function loadProfile() {
+    profileUserId = getQueryParam('userId');
+    if (!profileUserId) {
+        if (currentUser) {
+            profileUserId = currentUser.id;
+        } else {
+            document.getElementById('profileUsername').textContent = 'No user specified';
+            return;
+        }
+    }
+
+    isOwnProfile = currentUser && currentUser.id === profileUserId;
+
+    try {
+        const userRes = await fetch(`${API_BASE}/auth/users/${profileUserId}`);
+        if (!userRes.ok) throw new Error('User not found');
+        const userData = await userRes.json();
+
+        document.getElementById('profileUsername').textContent = userData.username;
+        const avatarEl = document.getElementById('profileAvatar');
+
+        // Show avatar image if available, otherwise colored circle
+        if (userData.avatarPath) {
+            avatarEl.innerHTML = '<img src="' + API_BASE + '/auth/users/' + profileUserId + '/avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+            avatarEl.style.background = 'none';
+        } else {
+            avatarEl.textContent = userData.username.charAt(0).toUpperCase();
+            avatarEl.style.background = userData.avatarColor || '#667eea';
+        }
+
+        document.getElementById('profileStats').textContent = profileVideos.length + ' videos';
+
+        const actionsDiv = document.getElementById('profileActions');
+        if (isOwnProfile) {
+            actionsDiv.innerHTML = `
+                <button class="btn-edit-profile" onclick="showAvatarPicker()">Change Color</button>
+                <button class="btn-edit-profile" onclick="showAccountSettings()">Account Settings</button>
+            `;
+        }
+    } catch (e) {
+        document.getElementById('profileUsername').textContent = 'User not found';
+    }
+
+    try {
+        const vidRes = await fetch(`${API_BASE}/videos/user/${profileUserId}`);
+        if (vidRes.ok) {
+            profileVideos = await vidRes.json();
+            displayProfileVideos(profileVideos);
+            document.getElementById('profileStats').textContent = profileVideos.length + ' videos';
+        }
+    } catch (e) {
+        document.getElementById('profileVideos').innerHTML = '<div class="loading">Failed to load videos</div>';
+    }
+}
+
+function displayProfileVideos(videos) {
+    const container = document.getElementById('profileVideos');
+    if (videos.length === 0) {
+        container.innerHTML = '<div class="loading">No videos uploaded yet</div>';
+        return;
+    }
+
+    let html = '<div class="videos-grid">';
+    for (const v of videos) {
+        const displayTitle = v.title || v.originalFilename || 'Video';
+        html += '<div class="video-card" data-video-id="' + v.id + '">' +
+            (isOwnProfile ? '<button class="btn-edit-video" onclick="event.stopPropagation();openEditVideo(\'' + v.id + '\')">✏️</button>' : '') +
+            (isOwnProfile ? '<button class="btn-delete-video" onclick="event.stopPropagation();deleteVideo(\'' + v.id + '\')">✕ Delete</button>' : '') +
+            '<div class="video-thumbnail">' +
+                '<img src="' + getThumbnail(v) + '" alt="' + escapeXml(displayTitle) + '">' +
+                '<div class="play-overlay"></div>' +
+                '<div class="preview-overlay"></div>' +
+                getStatusBadge(v.status) +
+            '</div>' +
+            '<div class="video-info">' +
+                '<div class="video-title">' + escapeXml(displayTitle) + '</div>' +
+                '<div class="video-meta">' +
+                    '<span>📅 ' + new Date(v.createdAt).toLocaleDateString() + '</span>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    setTimeout(() => {
+        container.querySelectorAll('.video-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const videoId = this.getAttribute('data-video-id');
+                window.location.href = 'watch.html?id=' + videoId;
+            });
+        });
+    }, 0);
+}
+
+function showAvatarPicker() {
+    const modal = document.getElementById('avatarColorModal');
+    const picker = document.getElementById('colorPicker');
+    picker.innerHTML = COLORS.map(c =>
+        '<div class="color-swatch" style="background:' + c + '" onclick="selectAvatarColor(\'' + c + '\')"></div>'
+    ).join('');
+    modal.classList.add('show');
+}
+
+async function selectAvatarColor(color) {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`${API_BASE}/auth/users/profile`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            body: JSON.stringify({ avatarColor: color })
+        });
+        if (res.ok) {
+            document.getElementById('avatarColorModal').classList.remove('show');
+            document.getElementById('profileAvatar').style.background = color;
+            showToast('Avatar color updated!', 'success');
+            loadProfile();
+        }
+    } catch (e) {
+        showToast('Failed to update avatar', 'error');
+    }
+}
+
+function showAccountSettings() {
+    document.getElementById('accountModal').classList.add('show');
+    // Update avatar preview
+    const avatarEl = document.getElementById('settingsAvatar');
+    if (currentUser) {
+        avatarEl.textContent = currentUser.username.charAt(0).toUpperCase();
+        avatarEl.style.background = document.getElementById('profileAvatar').style.background || '#667eea';
+    }
+}
+
+async function uploadAvatar(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('Image must be under 2MB', 'error');
+        return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch(`${API_BASE}/auth/users/avatar`, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + authToken },
+            body: formData
+        });
+        if (res.ok) {
+            showToast('Avatar uploaded!', 'success');
+            document.getElementById('accountModal').classList.remove('show');
+            loadProfile();
+        } else {
+            showToast('Upload failed', 'error');
+        }
+    } catch (e) {
+        showToast('Upload failed', 'error');
+    }
+    input.value = '';
+}
+
+async function changePassword() {
+    const oldPw = document.getElementById('oldPassword').value;
+    const newPw = document.getElementById('newPassword').value;
+    if (!oldPw || !newPw) {
+        showToast('Fill in both fields', 'error');
+        return;
+    }
+    if (newPw.length < 6) {
+        showToast('New password must be at least 6 characters', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/auth/users/password`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            body: JSON.stringify({ oldPassword: oldPw, newPassword: newPw })
+        });
+        if (res.ok) {
+            showToast('Password changed!', 'success');
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+        } else {
+            const err = await res.json();
+            showToast(err.error || 'Failed', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to change password', 'error');
+    }
+}
+
+async function deleteAccount() {
+    if (!confirm('Are you sure you want to permanently delete your account and all videos? This cannot be undone!')) return;
+    if (!confirm('Really delete? All your videos will be gone forever.')) return;
+    try {
+        const res = await fetch(`${API_BASE}/auth/users/account`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            showToast('Account deleted', 'success');
+            logout();
+            window.location.href = 'index.html';
+        } else {
+            const err = await res.json();
+            showToast(err.error || 'Delete failed', 'error');
+        }
+    } catch (e) {
+        showToast('Delete failed', 'error');
+    }
+}
+
+function openEditVideo(videoId) {
+    const v = profileVideos.find(x => x.id === videoId);
+    if (!v) return;
+    document.getElementById('editVideoId').value = videoId;
+    document.getElementById('editVideoTitle').value = v.title || '';
+    document.getElementById('editVideoDescription').value = v.description || '';
+    document.getElementById('editVideoPrivacy').value = v.privacy || 'public';
+    document.getElementById('editVideoModal').classList.add('show');
+    // Setup mention on edit description
+    setTimeout(() => setupMentionOnInput(document.getElementById('editVideoDescription')), 100);
+}
+
+function closeEditVideo() {
+    document.getElementById('editVideoModal').classList.remove('show');
+}
+
+async function saveEditVideo() {
+    const videoId = document.getElementById('editVideoId').value;
+    const title = document.getElementById('editVideoTitle').value;
+    const description = document.getElementById('editVideoDescription').value;
+    const privacy = document.getElementById('editVideoPrivacy').value;
+
+    try {
+        const res = await fetch(`${API_BASE}/videos/${videoId}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            body: JSON.stringify({ title, description, privacy })
+        });
+        if (res.ok) {
+            closeEditVideo();
+            showToast('Video updated!', 'success');
+            loadProfile();
+        } else {
+            const err = await res.text();
+            showToast('Update failed: ' + err, 'error');
+        }
+    } catch (e) {
+        showToast('Update failed', 'error');
+    }
+}
+
+async function deleteVideo(videoId) {
+    if (!confirm('Delete this video permanently?')) return;
+    try {
+        const res = await fetch(`${API_BASE}/videos/${videoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            showToast('Video deleted', 'success');
+            loadProfile();
+        } else {
+            const err = await res.text();
+            showToast('Delete failed: ' + err, 'error');
+        }
+    } catch (e) {
+        showToast('Delete failed', 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(loadProfile, 100);
+});
+</script>
+</body>
+</html>
