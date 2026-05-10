@@ -416,11 +416,14 @@ async function loadLikes(videoId) {
 mentionTimeout = null;
 mentionUsers = [];
 mentionIndex = -1;
+currentMentionInput = null;
 
-function setupMentionAutocomplete() {
-    const input = document.getElementById('commentInput');
-    if (!input) return;
-    input.addEventListener('input', function() {
+function attachMentionHandlers(inputEl, onEnter) {
+    if (!inputEl) return;
+    inputEl.addEventListener('focus', function() {
+        currentMentionInput = this;
+    });
+    inputEl.addEventListener('input', function() {
         clearTimeout(mentionTimeout);
         const cursorPos = this.selectionStart;
         const text = this.value.substring(0, cursorPos);
@@ -445,7 +448,18 @@ function setupMentionAutocomplete() {
         }
     });
 
-    input.addEventListener('keydown', function(e) {
+    inputEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const dropdown = document.getElementById('mentionDropdown');
+            if (dropdown && mentionIndex >= 0 && mentionUsers[mentionIndex]) {
+                e.preventDefault();
+                insertMention(this, mentionUsers[mentionIndex].username);
+                return;
+            }
+            e.preventDefault();
+            if (onEnter) onEnter();
+            return;
+        }
         const dropdown = document.getElementById('mentionDropdown');
         if (!dropdown) return;
         if (e.key === 'ArrowDown') {
@@ -456,13 +470,17 @@ function setupMentionAutocomplete() {
             e.preventDefault();
             mentionIndex = Math.max(mentionIndex - 1, 0);
             highlightMention();
-        } else if (e.key === 'Enter' || e.key === 'Tab') {
+        } else if (e.key === 'Tab') {
             if (mentionIndex >= 0 && mentionUsers[mentionIndex]) {
                 e.preventDefault();
                 insertMention(this, mentionUsers[mentionIndex].username);
             }
         }
     });
+}
+
+function setupMentionAutocomplete() {
+    attachMentionHandlers(document.getElementById('commentInput'), addComment);
 }
 
 function showMentionDropdown(input, prefix) {
@@ -493,7 +511,7 @@ function highlightMention() {
 }
 
 function selectMention(index) {
-    const input = document.getElementById('commentInput');
+    const input = currentMentionInput;
     if (input && mentionUsers[index]) {
         insertMention(input, mentionUsers[index].username);
     }
@@ -520,7 +538,7 @@ function insertMention(input, username) {
 
 // Close mention dropdown on outside click
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('#mentionDropdown') && !e.target.closest('#commentInput')) {
+    if (!e.target.closest('#mentionDropdown') && !e.target.closest('#commentInput') && !e.target.closest('.edit-comment-input')) {
         const dropdown = document.getElementById('mentionDropdown');
         if (dropdown) dropdown.remove();
         mentionUsers = [];
@@ -566,6 +584,8 @@ async function addComment() {
     }
 }
 
+const commentContents = {};
+
 async function loadComments(videoId) {
     if (!videoId) return;
     try {
@@ -577,19 +597,101 @@ async function loadComments(videoId) {
             if (comments.length === 0) {
                 list.innerHTML = '<div style="color:#aaa;padding:10px;">No comments yet</div>';
             } else {
-                list.innerHTML = comments.map(c => `
-                    <div class="comment-item">
-                        <div class="comment-user-avatar">${c.userId ? c.userId.charAt(0).toUpperCase() : 'U'}</div>
-                        <div class="comment-content">
-                            <div class="comment-user">${c.userId ? c.userId.substring(0, 8) : 'User'}</div>
-                            <div class="comment-text">${renderMentions(c.content)}</div>
-                            <div class="comment-date">${new Date(c.createdAt).toLocaleString()}</div>
-                        </div>
-                    </div>
-                `).join('');
+                const currentUserId = currentUser && (currentUser.id || currentUser.userId);
+                list.innerHTML = comments.map(c => {
+                    commentContents[c.id] = c.content;
+                    const isOwn = currentUserId && c.userId === currentUserId;
+                    const avatarStyle = c.avatarColor ? 'style="background:' + c.avatarColor + '"' : '';
+                    const avatarHtml = c.avatarPath
+                        ? '<img src="' + API_BASE + '/auth/users/' + c.userId + '/avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+                        : (c.username ? c.username.charAt(0).toUpperCase() : 'U');
+                    return '<div class="comment-item">' +
+                        '<div class="comment-user-avatar" ' + avatarStyle + '>' + avatarHtml + '</div>' +
+                        '<div class="comment-content">' +
+                            '<div class="comment-user">' + esc(c.username || 'Unknown') + '</div>' +
+                            '<div class="comment-text" id="commentText_' + c.id + '">' + renderMentions(c.content) + '</div>' +
+                            '<div class="comment-meta-row">' +
+                                '<span class="comment-date">' + timeAgo(new Date(c.createdAt)) + '</span>' +
+                                (c.updatedAt ? '<span class="comment-edited">(edited)</span>' : '') +
+                                (isOwn ? '<button class="btn-comment-edit" data-cid="' + c.id + '">Edit</button>' : '') +
+                                (isOwn ? '<button class="btn-comment-delete" data-cid="' + c.id + '">Delete</button>' : '') +
+                            '</div>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
             }
         }
     } catch (e) {}
+}
+
+function startEditComment(commentId) {
+    const content = commentContents[commentId];
+    if (content === undefined) return;
+    const textDiv = document.getElementById('commentText_' + commentId);
+    textDiv.innerHTML = '<input type="text" class="edit-comment-input" id="editCommentInput_' + commentId + '" value="' + escAttr(content) + '" style="width:100%;padding:8px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff;font-size:13px;">' +
+        '<div style="margin-top:6px;display:flex;gap:8px;">' +
+        '<button class="btn-primary" style="padding:4px 12px;font-size:12px;" onclick="saveEditComment(\'' + commentId + '\')">Save</button>' +
+        '<button class="btn-secondary" style="padding:4px 12px;font-size:12px;" onclick="cancelEditComment(\'' + commentId + '\')">Cancel</button>' +
+        '</div>';
+    const editInput = textDiv.querySelector('input');
+    editInput.focus();
+    attachMentionHandlers(editInput, function() { saveEditComment(commentId); });
+}
+
+function escAttr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function cancelEditComment(commentId) {
+    const content = commentContents[commentId];
+    if (content === undefined) return;
+    const textDiv = document.getElementById('commentText_' + commentId);
+    textDiv.innerHTML = renderMentions(content);
+}
+
+async function saveEditComment(commentId) {
+    const input = document.getElementById('editCommentInput_' + commentId);
+    const content = input.value.trim();
+    if (!content) return;
+    try {
+        const res = await fetch(`${API_BASE}/videos/comments/${commentId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ content })
+        });
+        if (res.ok) {
+            loadComments(currentVideoId);
+            showToast('Comment updated', 'success');
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.error || 'Failed to update comment', 'error');
+        }
+    } catch (e) {
+        showToast('Error updating comment', 'error');
+    }
+}
+
+async function deleteComment(commentId) {
+    if (!confirm('Delete this comment?')) return;
+    try {
+        const res = await fetch(`${API_BASE}/videos/comments/${commentId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+            loadComments(currentVideoId);
+            showToast('Comment deleted', 'success');
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.error || 'Failed to delete comment', 'error');
+        }
+    } catch (e) {
+        showToast('Error deleting comment', 'error');
+    }
 }
 
 function shareVideo() {
@@ -824,6 +926,24 @@ if (authToken && currentUser) {
 }
 
 setupMentionAutocomplete();
+
+// Comment button click handler
+const commentBtn = document.getElementById('submitCommentBtn');
+if (commentBtn) commentBtn.addEventListener('click', addComment);
+
+// Event delegation for edit/delete comment buttons
+const commentsList = document.getElementById('commentsList');
+if (commentsList) {
+    commentsList.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target.classList.contains('btn-comment-edit')) {
+            startEditComment(target.dataset.cid);
+        } else if (target.classList.contains('btn-comment-delete')) {
+            deleteComment(target.dataset.cid);
+        }
+    });
+}
+
 loadVideo();
 loadAllVideos();
 setInterval(() => { if (authToken) loadUnreadCount(); }, 60000);

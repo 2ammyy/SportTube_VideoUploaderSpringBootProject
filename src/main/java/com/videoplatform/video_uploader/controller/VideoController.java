@@ -287,7 +287,65 @@ public class VideoController {
     @GetMapping("/{id}/comments")
     public ResponseEntity<?> getComments(@PathVariable UUID id) {
         List<Comment> comments = commentRepository.findByVideoIdOrderByCreatedAtDesc(id);
-        return ResponseEntity.ok(comments);
+        List<Map<String, Object>> enriched = comments.stream().map(c -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", c.getId());
+            m.put("videoId", c.getVideoId());
+            m.put("userId", c.getUserId());
+            m.put("content", c.getContent());
+            m.put("createdAt", c.getCreatedAt());
+            m.put("updatedAt", c.getUpdatedAt());
+            User u = userRepository.findById(c.getUserId()).orElse(null);
+            m.put("username", u != null ? u.getUsername() : "Unknown");
+            m.put("avatarPath", u != null ? u.getAvatarPath() : null);
+            m.put("avatarColor", u != null ? u.getAvatarColor() : "#667eea");
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(enriched);
+    }
+
+    @PutMapping("/comments/{commentId}")
+    public ResponseEntity<?> updateComment(@PathVariable UUID commentId, @RequestBody Map<String, String> request, @RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            Comment comment = commentRepository.findById(commentId)
+                    .orElseThrow(() -> new RuntimeException("Comment not found"));
+            if (!comment.getUserId().equals(userId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "You can only edit your own comments"));
+            }
+            comment.setContent(request.get("content"));
+            commentRepository.save(comment);
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", comment.getId());
+            m.put("videoId", comment.getVideoId());
+            m.put("userId", comment.getUserId());
+            m.put("content", comment.getContent());
+            m.put("createdAt", comment.getCreatedAt());
+            m.put("updatedAt", comment.getUpdatedAt());
+            User u = userRepository.findById(comment.getUserId()).orElse(null);
+            m.put("username", u != null ? u.getUsername() : "Unknown");
+            m.put("avatarPath", u != null ? u.getAvatarPath() : null);
+            m.put("avatarColor", u != null ? u.getAvatarColor() : "#667eea");
+            return ResponseEntity.ok(m);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/comments/{commentId}")
+    public ResponseEntity<?> deleteComment(@PathVariable UUID commentId, @RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            Comment comment = commentRepository.findById(commentId)
+                    .orElseThrow(() -> new RuntimeException("Comment not found"));
+            if (!comment.getUserId().equals(userId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "You can only delete your own comments"));
+            }
+            commentRepository.delete(comment);
+            return ResponseEntity.ok(Map.of("message", "Comment deleted"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ============ STREAMING ENDPOINT ============
