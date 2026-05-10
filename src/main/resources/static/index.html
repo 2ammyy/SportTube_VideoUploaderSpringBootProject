@@ -35,10 +35,16 @@
             <span id="userName">Guest</span>
         </div>
         <div class="profile-dropdown" id="profileDropdown">
-            <div style="padding: 10px 20px; border-bottom: 1px solid #333;" id="userEmail"></div>
-            <a onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
-            <a onclick="logout()">🚪 Logout</a>
-            <a onclick="location.href='login.html'">🔐 Login/Signup</a>
+            <div style="padding:10px 20px;border-bottom:1px solid #333;display:flex;align-items:center;gap:10px;" id="dropdownUserInfo">
+                <div class="user-avatar" id="dropdownAvatar" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;color:#fff;flex-shrink:0;">👤</div>
+                <div>
+                    <div id="dropdownUserName" style="font-weight:600;">Guest</div>
+                    <div style="font-size:11px;color:#888;" id="userEmail">Not logged in</div>
+                </div>
+            </div>
+            <a id="myChannelLink" onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
+            <a id="loginSignupLink" onclick="showLogin()">🔐 Login / Signup</a>
+            <a id="logoutLink" onclick="logout()" style="display:none;">🚪 Logout</a>
         </div>
     </div>
 </nav>

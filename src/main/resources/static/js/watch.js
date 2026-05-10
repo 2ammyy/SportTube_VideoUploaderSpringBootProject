@@ -50,12 +50,8 @@ function doLogout() {
 }
 
 function updateNavUI() {
-    if (currentUser) {
-        document.getElementById('userName').textContent = currentUser.username;
-        document.getElementById('userEmail').textContent = currentUser.username;
-        document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
-        document.getElementById('logoutLink').style.display = 'block';
-    }
+    // Use the shared updateUserUI from app.js for consistent avatar/logged-in state
+    if (typeof updateUserUI === 'function') updateUserUI();
 }
 
 function toggleProfileDropdown() {
@@ -723,7 +719,7 @@ function hashCode(str) {
 
 function renderMentions(text) {
     if (!text) return '';
-    return esc(text).replace(/@(\w+)/g, '<a href="#" class="mention-link" onclick="event.preventDefault();window.location.href=\'index.html?search=@$1\'">@$1</a>');
+    return esc(text).replace(/@(\w+)/g, '<a href="#" class="mention-link" onclick="event.preventDefault();goToUserProfile(\'$1\')">@$1</a>');
 }
 
 function timeAgo(date) {

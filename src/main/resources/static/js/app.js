@@ -83,14 +83,50 @@ function logout() {
 }
 
 function updateUserUI() {
-    if (currentUser) {
-        document.getElementById('userName').textContent = currentUser.username;
-        document.getElementById('userEmail').textContent = currentUser.username;
-        document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+    const loggedIn = !!currentUser;
+    // Navbar avatar
+    const userAvatar = document.getElementById('userAvatar');
+    const userName = document.getElementById('userName');
+    // Dropdown elements
+    const dropdownAvatar = document.getElementById('dropdownAvatar');
+    const dropdownUserName = document.getElementById('dropdownUserName');
+    const userEmail = document.getElementById('userEmail');
+    const myChannelLink = document.getElementById('myChannelLink');
+    const loginSignupLink = document.getElementById('loginSignupLink');
+    const logoutLink = document.getElementById('logoutLink');
+
+    if (loggedIn) {
+        const initial = currentUser.username.charAt(0).toUpperCase();
+        userName.textContent = currentUser.username;
+        if (userEmail) userEmail.textContent = currentUser.username;
+        if (dropdownUserName) dropdownUserName.textContent = currentUser.username;
+
+        // Try to load avatar image
+        const userId = currentUser.id;
+        const avatarUrl = `${API_BASE}/auth/users/${userId}/avatar`;
+
+        [userAvatar, dropdownAvatar].forEach(el => {
+            if (!el) return;
+            el.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentElement.textContent='${initial}';this.parentElement.style.background='#667eea'">`;
+            el.style.background = 'none';
+        });
+
+        if (myChannelLink) myChannelLink.style.display = '';
+        if (loginSignupLink) loginSignupLink.style.display = 'none';
+        if (logoutLink) logoutLink.style.display = '';
     } else {
-        document.getElementById('userName').textContent = 'Guest';
-        document.getElementById('userEmail').textContent = 'Not logged in';
-        document.getElementById('userAvatar').textContent = '👤';
+        userName.textContent = 'Guest';
+        if (userEmail) userEmail.textContent = 'Not logged in';
+        if (dropdownUserName) dropdownUserName.textContent = 'Guest';
+        [userAvatar, dropdownAvatar].forEach(el => {
+            if (!el) { return; }
+            el.textContent = '👤';
+            el.style.background = 'none';
+            el.innerHTML = '👤';
+        });
+        if (myChannelLink) myChannelLink.style.display = 'none';
+        if (loginSignupLink) loginSignupLink.style.display = '';
+        if (logoutLink) logoutLink.style.display = 'none';
     }
 }
 
@@ -337,7 +373,7 @@ async function loadSaved() {
                         <div class="video-info">
                             <div class="video-title">${escapeXml(v.videoTitle || 'Video')}</div>
                             <div class="channel-row" onclick="event.stopPropagation();window.location.href='profile.html?userId=${v.uploaderUserId}'">
-                                <div class="channel-avatar" style="background:${v.avatarColor || '#667eea'}">${(v.username || '?').charAt(0).toUpperCase()}</div>
+                                <div class="channel-avatar" style="background:${v.avatarColor || '#667eea'}">${channelAvatarHtml(v)}</div>
                                 <span class="channel-name">${escapeXml(v.username || 'Unknown')}</span>
                             </div>
                             <div class="video-meta"><span>Saved</span></div>
@@ -375,7 +411,7 @@ async function loadHistory() {
                         <div class="video-info">
                             <div class="video-title">${escapeXml(v.videoTitle || 'Video')}</div>
                             <div class="channel-row" onclick="event.stopPropagation();window.location.href='profile.html?userId=${v.uploaderUserId}'">
-                                <div class="channel-avatar" style="background:${v.avatarColor || '#667eea'}">${(v.username || '?').charAt(0).toUpperCase()}</div>
+                                <div class="channel-avatar" style="background:${v.avatarColor || '#667eea'}">${channelAvatarHtml(v)}</div>
                                 <span class="channel-name">${escapeXml(v.username || 'Unknown')}</span>
                             </div>
                             <div class="video-meta"><span>Watched</span></div>
@@ -511,6 +547,17 @@ function getDisplayTitle(video) {
     return video.title || video.originalFilename || 'Video';
 }
 
+function channelAvatarHtml(item) {
+    const name = item.username || '?';
+    const initial = name.charAt(0).toUpperCase();
+    const color = item.avatarColor || '#667eea';
+    const uploaderId = item.uploaderUserId || item.userId;
+    if (item.avatarPath) {
+        return `<img src="${API_BASE}/auth/users/${uploaderId}/avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='${initial}';this.parentElement.style.background='${color}'">`;
+    }
+    return initial;
+}
+
 function displayVideos(videos) {
     const container = document.getElementById('videosContainer');
     if (!container) return;
@@ -535,9 +582,10 @@ function displayVideos(videos) {
             '<div class="video-info">' +
                 '<div class="video-title">' + escapeXml(displayTitle) + '</div>' +
                 '<div class="channel-row" onclick="event.stopPropagation();window.location.href=\'profile.html?userId=' + video.userId + '\'">' +
-                    '<div class="channel-avatar" style="background:' + (video.avatarColor || '#667eea') + '">' + (video.username || '?').charAt(0).toUpperCase() + '</div>' +
+                    '<div class="channel-avatar" style="background:' + (video.avatarColor || '#667eea') + '">' + channelAvatarHtml(video) + '</div>' +
                     '<span class="channel-name">' + escapeXml(video.username || 'Unknown') + '</span>' +
                 '</div>' +
+
                 '<div class="video-meta">' +
                     '<span>📅 ' + new Date(video.createdAt).toLocaleDateString() + '</span>' +
                 '</div>' +
@@ -1076,7 +1124,22 @@ function renderMentions(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML.replace(/@(\w+)/g, '<a href="#" class="mention-link" onclick="event.preventDefault();window.location.href=\'index.html?search=@$1\'">@$1</a>');
+    return div.innerHTML.replace(/@(\w+)/g, '<a href="#" class="mention-link" onclick="event.preventDefault();goToUserProfile(\'$1\')">@$1</a>');
+}
+
+async function goToUserProfile(username) {
+    try {
+        const res = await fetch(`${API_BASE}/auth/users/search?q=${encodeURIComponent(username)}`);
+        if (res.ok) {
+            const users = await res.json();
+            const match = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            if (match) {
+                window.location.href = `profile.html?userId=${match.id}`;
+                return;
+            }
+        }
+    } catch (e) {}
+    showToast('User not found', 'error');
 }
 
 // Init mention autocomplete on description fields after DOM ready
