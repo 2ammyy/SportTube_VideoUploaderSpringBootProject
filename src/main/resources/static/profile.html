@@ -47,54 +47,20 @@
 </div>
 
 <div class="container">
-    <div class="section">
-        <div class="section-header">
-            <h2 class="section-title">Uploads</h2>
-        </div>
-        <div id="profileVideos">
-            <div class="loading">Loading videos...</div>
-        </div>
+    <div class="profile-tabs" id="profileTabs">
+        <button class="profile-tab active" onclick="switchProfileTab('videos')">Uploads</button>
+        <button class="profile-tab" onclick="switchProfileTab('playlists')">Playlists</button>
+        <button class="profile-tab" id="savedTab" onclick="switchProfileTab('saved')" style="display:none;">Saved Videos</button>
     </div>
-
-    <div class="section">
-        <div class="section-header">
-            <h2 class="section-title">Playlists</h2>
-            <a href="#" class="section-link" onclick="showCreatePlaylistModal(function(){location.reload()})">+ New Playlist</a>
+    <div id="profileTabVideos" class="profile-tab-content active"></div>
+    <div id="profileTabPlaylists" class="profile-tab-content">
+        <div class="playlist-section-header">
+            <h3>Playlists</h3>
+            <button id="newPlaylistBtn" class="btn-edit-profile" style="display:none;" onclick="openCreatePlaylistModal()">+ New Playlist</button>
         </div>
-        <div id="profilePlaylists">
-            <div class="loading">Loading playlists...</div>
-        </div>
+        <div class="playlist-grid" id="profilePlaylistsGrid"></div>
     </div>
-</div>
-
-<!-- Edit Video Modal -->
-<div class="edit-modal" id="editVideoModal">
-    <div class="edit-modal-content">
-        <h2>Edit Video</h2>
-        <input type="hidden" id="editVideoId">
-        <input type="text" id="editVideoTitle" placeholder="Video title">
-        <textarea id="editVideoDescription" rows="4" placeholder="Description (use @username to mention users)"></textarea>
-        <select id="editVideoPrivacy" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #333;border-radius:6px;background:#16213e;color:#fff;">
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-            <option value="unlisted">Unlisted</option>
-        </select>
-        <div class="edit-modal-actions">
-            <button class="btn-edit-profile" onclick="closeEditVideo()">Cancel</button>
-            <button style="background:#e50914;color:#fff;padding:8px 20px;border:none;border-radius:4px;cursor:pointer;font-weight:600;" onclick="saveEditVideo()">Save</button>
-        </div>
-    </div>
-</div>
-
-<!-- Avatar Color Picker Modal -->
-<div class="edit-modal" id="avatarColorModal">
-    <div class="edit-modal-content">
-        <h2>Choose Avatar Color</h2>
-        <div class="color-picker" id="colorPicker"></div>
-        <div class="edit-modal-actions">
-            <button class="btn-edit-profile" onclick="document.getElementById('avatarColorModal').classList.remove('show')">Cancel</button>
-        </div>
-    </div>
+    <div id="profileTabSaved" class="profile-tab-content"></div>
 </div>
 
 <!-- Account Settings Modal -->
@@ -102,14 +68,19 @@
     <div class="edit-modal-content">
         <h2>Account Settings</h2>
 
-        <h3 style="color:#ccc;font-size:14px;margin:16px 0 8px;">Avatar Image</h3>
-        <div style="display:flex;align-items:center;gap:16px;">
+        <h3 style="color:#ccc;font-size:14px;margin:16px 0 8px;">Avatar</h3>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
             <div class="profile-avatar" id="settingsAvatar" style="width:64px;height:64px;font-size:24px;">?</div>
             <div>
                 <button class="btn-edit-profile" onclick="document.getElementById('avatarUploadInput').click()">Upload Photo</button>
                 <input type="file" id="avatarUploadInput" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
-                <p style="color:#888;font-size:11px;margin-top:4px;">Recommended: square image, max 2MB</p>
+                <p style="color:#888;font-size:11px;margin-top:4px;">Square image recommended, max 2MB</p>
             </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+            <p style="color:#aaa;font-size:13px;margin-bottom:8px;">Or choose a color:</p>
+            <div class="color-picker" id="settingsColorPicker" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
         </div>
 
         <h3 style="color:#ccc;font-size:14px;margin:16px 0 8px;">Change Password</h3>
@@ -185,7 +156,6 @@ async function loadProfile() {
         const actionsDiv = document.getElementById('profileActions');
         if (isOwnProfile) {
             actionsDiv.innerHTML = `
-                <button class="btn-edit-profile" onclick="showAvatarPicker()">Change Color</button>
                 <button class="btn-edit-profile" onclick="showAccountSettings()">Account Settings</button>
             `;
         }
@@ -201,7 +171,7 @@ async function loadProfile() {
             document.getElementById('profileStats').textContent = profileVideos.length + ' videos';
         }
     } catch (e) {
-        document.getElementById('profileVideos').innerHTML = '<div class="loading">Failed to load videos</div>';
+        document.getElementById('profileTabVideos').innerHTML = '<div class="loading">Failed to load videos</div>';
     }
 
     // Load playlists
@@ -209,15 +179,72 @@ async function loadProfile() {
         const plRes = await fetch(`${API_BASE}/playlists/user/${profileUserId}`);
         if (plRes.ok) {
             const playlists = await plRes.json();
-            displayPlaylists(playlists, 'profilePlaylists');
+            displayPlaylists(playlists, 'profilePlaylistsGrid');
         }
     } catch (e) {
-        document.getElementById('profilePlaylists').innerHTML = '<div class="loading">Failed to load playlists</div>';
+        document.getElementById('profilePlaylistsGrid').innerHTML = '<div class="loading">Failed to load playlists</div>';
+    }
+
+    // Show saved tab + new playlist button + load saved videos only for own profile
+    if (isOwnProfile) {
+        document.getElementById('savedTab').style.display = 'inline-block';
+        document.getElementById('newPlaylistBtn').style.display = 'block';
+        loadProfileSavedVideos();
     }
 }
 
+async function loadProfileSavedVideos() {
+    if (!authToken) return;
+    try {
+        const res = await fetch(`${API_BASE}/videos/saved`, {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            const saved = await res.json();
+            const container = document.getElementById('profileTabSaved');
+            if (saved.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">No saved videos yet.</div>';
+                return;
+            }
+            let html = '<div class="videos-grid">';
+            for (const v of saved) {
+                const displayTitle = v.videoTitle || 'Video';
+                html += '<div class="video-card" data-video-id="' + v.videoId + '">' +
+                    '<div class="video-thumbnail">' +
+                        '<img src="' + (v.thumbnailPath ? API_BASE + '/videos/' + v.videoId + '/thumbnail' : 'https://via.placeholder.com/320x180?text=No+Thumbnail') + '" alt="' + escapeXml(displayTitle) + '">' +
+                        '<div class="play-overlay"></div>' +
+                    '</div>' +
+                    '<div class="video-info">' +
+                        '<div class="video-title">' + escapeXml(displayTitle) + '</div>' +
+                        '<div class="channel-row" onclick="event.stopPropagation();window.location.href=\'profile.html?userId=' + v.uploaderUserId + '\'">' +
+                            '<div class="channel-avatar" style="background:' + (v.avatarColor || '#667eea') + '">' + channelAvatarHtml(v) + '</div>' +
+                            '<span class="channel-name">' + escapeXml(v.username || 'Unknown') + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            }
+            html += '</div>';
+            container.innerHTML = html;
+            setTimeout(() => {
+                container.querySelectorAll('.video-card').forEach(card => {
+                    card.addEventListener('click', function() {
+                        window.location.href = 'watch.html?id=' + this.getAttribute('data-video-id');
+                    });
+                });
+            }, 0);
+        }
+    } catch (e) {}
+}
+
+function switchProfileTab(tab) {
+    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.profile-tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.profile-tab[onclick*="'${tab}'"]`).classList.add('active');
+    document.getElementById('profileTab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+}
+
 function displayProfileVideos(videos) {
-    const container = document.getElementById('profileVideos');
+    const container = document.getElementById('profileTabVideos');
     if (videos.length === 0) {
         container.innerHTML = '<div class="loading">No videos uploaded yet</div>';
         return;
@@ -256,16 +283,29 @@ function displayProfileVideos(videos) {
     }, 0);
 }
 
-function showAvatarPicker() {
-    const modal = document.getElementById('avatarColorModal');
-    const picker = document.getElementById('colorPicker');
+function showAccountSettings() {
+    document.getElementById('accountModal').classList.add('show');
+    // Update avatar preview
+    const avatarEl = document.getElementById('settingsAvatar');
+    if (currentUser) {
+        // Try to show current avatar
+        const profileAvatar = document.getElementById('profileAvatar');
+        if (profileAvatar.querySelector('img')) {
+            avatarEl.innerHTML = profileAvatar.querySelector('img').cloneNode(true);
+            avatarEl.style.background = 'none';
+        } else {
+            avatarEl.textContent = currentUser.username.charAt(0).toUpperCase();
+            avatarEl.style.background = profileAvatar.style.background || '#667eea';
+        }
+    }
+    // Render color picker inline
+    const picker = document.getElementById('settingsColorPicker');
     picker.innerHTML = COLORS.map(c =>
-        '<div class="color-swatch" style="background:' + c + '" onclick="selectAvatarColor(\'' + c + '\')"></div>'
+        '<div class="color-swatch" style="background:' + c + '" onclick="selectAvatarColorInline(\'' + c + '\')"></div>'
     ).join('');
-    modal.classList.add('show');
 }
 
-async function selectAvatarColor(color) {
+async function selectAvatarColorInline(color) {
     if (!currentUser) return;
     try {
         const res = await fetch(`${API_BASE}/auth/users/profile`, {
@@ -274,23 +314,20 @@ async function selectAvatarColor(color) {
             body: JSON.stringify({ avatarColor: color })
         });
         if (res.ok) {
-            document.getElementById('avatarColorModal').classList.remove('show');
-            document.getElementById('profileAvatar').style.background = color;
+            const initial = currentUser.username.charAt(0).toUpperCase();
+            const settingsAvatar = document.getElementById('settingsAvatar');
+            settingsAvatar.innerHTML = '';
+            settingsAvatar.textContent = initial;
+            settingsAvatar.style.background = color;
+            // Update profile header too
+            const profileAvatar = document.getElementById('profileAvatar');
+            profileAvatar.innerHTML = '';
+            profileAvatar.textContent = initial;
+            profileAvatar.style.background = color;
             showToast('Avatar color updated!', 'success');
-            loadProfile();
         }
     } catch (e) {
         showToast('Failed to update avatar', 'error');
-    }
-}
-
-function showAccountSettings() {
-    document.getElementById('accountModal').classList.add('show');
-    // Update avatar preview
-    const avatarEl = document.getElementById('settingsAvatar');
-    if (currentUser) {
-        avatarEl.textContent = currentUser.username.charAt(0).toUpperCase();
-        avatarEl.style.background = document.getElementById('profileAvatar').style.background || '#667eea';
     }
 }
 
@@ -311,10 +348,17 @@ async function uploadAvatar(input) {
         });
         if (res.ok) {
             showToast('Avatar uploaded!', 'success');
+            // Show uploaded image in preview immediately
+            const avatarEl = document.getElementById('settingsAvatar');
+            avatarEl.innerHTML = '<img src="' + API_BASE + '/auth/users/' + currentUser.id + '/avatar?t=' + Date.now() + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+            avatarEl.style.background = 'none';
+            document.getElementById('profileAvatar').innerHTML = avatarEl.innerHTML;
+            document.getElementById('profileAvatar').style.background = 'none';
+            showToast('Avatar updated!', 'success');
             document.getElementById('accountModal').classList.remove('show');
-            loadProfile();
         } else {
-            showToast('Upload failed', 'error');
+            const err = await res.text();
+            showToast('Upload failed: ' + err, 'error');
         }
     } catch (e) {
         showToast('Upload failed', 'error');

@@ -1261,3 +1261,73 @@ body {
 .btn-primary.saved:hover {
     background: #444;
 }
+
+/* ============ PROFILE TABS ============ */
+
+.profile-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #333;
+    margin-bottom: 20px;
+}
+.profile-tab {
+    background: none;
+    border: none;
+    color: #888;
+    padding: 10px 24px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.2s, border-color 0.2s;
+}
+.profile-tab:hover {
+    color: #fff;
+}
+.profile-tab.active {
+    color: #e50914;
+    border-bottom-color: #e50914;
+}
+.profile-tab-content {
+    display: none;
+}
+.profile-tab-content.active {
+    display: block;
+}
+
+/* ============ HORIZONTAL SCROLL SECTIONS ============ */
+
+.scroll-x {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+.scroll-x::-webkit-scrollbar {
+    height: 6px;
+}
+.scroll-x::-webkit-scrollbar-track {
+    background: #1a1a2e;
+    border-radius: 3px;
+}
+.scroll-x::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+}
+.scroll-x::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+.scroll-x > .video-card {
+    flex: 0 0 auto;
+    width: 280px;
+    scroll-snap-align: start;
+}
+.scroll-x > .playlist-card {
+    flex: 0 0 auto;
+    width: 240px;
+    scroll-snap-align: start;
+}

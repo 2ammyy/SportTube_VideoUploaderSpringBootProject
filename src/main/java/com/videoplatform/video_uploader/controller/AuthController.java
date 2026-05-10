@@ -110,6 +110,10 @@ public class AuthController {
             User user = userRepository.findById(userId).orElseThrow();
             if (request.containsKey("avatarColor")) {
                 user.setAvatarColor(request.get("avatarColor"));
+                if (user.getAvatarPath() != null) {
+                    try { Files.deleteIfExists(Paths.get(user.getAvatarPath())); } catch (Exception ignored) {}
+                    user.setAvatarPath(null);
+                }
             }
             userRepository.save(user);
             return ResponseEntity.ok(userToMap(user));
@@ -125,6 +129,7 @@ public class AuthController {
             String avatarPath = storageService.uploadAvatar(file, userId);
             User user = userRepository.findById(userId).orElseThrow();
             user.setAvatarPath(avatarPath);
+            user.setAvatarColor(null);
             userRepository.save(user);
             return ResponseEntity.ok(Map.of("avatarPath", avatarPath, "message", "Avatar uploaded"));
         } catch (Exception e) {

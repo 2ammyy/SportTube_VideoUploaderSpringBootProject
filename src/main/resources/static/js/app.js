@@ -366,7 +366,7 @@ async function loadSaved() {
                 section.style.display = 'none';
             } else {
                 section.style.display = 'block';
-                container.innerHTML = '<div class="videos-grid">' + saved.map(v => `
+                container.innerHTML = '<div class="scroll-x">' + saved.map(v => `
                     <div class="video-card" onclick="window.location.href='watch.html?id=${v.videoId}'">
                         <div class="video-thumbnail">
                             <img src="${getThumbnail({id: v.videoId, thumbnailPath: v.thumbnailPath, originalFilename: v.videoTitle})}" alt="${escapeXml(v.videoTitle || 'Video')}">
@@ -404,7 +404,7 @@ async function loadHistory() {
                 section.style.display = 'none';
             } else {
                 section.style.display = 'block';
-                container.innerHTML = '<div class="videos-grid">' + history.map(v => `
+                container.innerHTML = '<div class="scroll-x">' + history.map(v => `
                     <div class="video-card" onclick="window.location.href='watch.html?id=${v.videoId}'">
                         <div class="video-thumbnail">
                             <img src="${getThumbnail({id: v.videoId, thumbnailPath: v.thumbnailPath, originalFilename: v.videoTitle})}" alt="${escapeXml(v.videoTitle || 'Video')}">
@@ -1504,7 +1504,7 @@ async function loadSavedPlaylistsSection() {
     const playlists = await loadSavedPlaylists();
     if (playlists && playlists.length > 0) {
         section.style.display = 'block';
-        displayPlaylists(playlists, 'savedPlaylistsContainer');
+        container.innerHTML = '<div class="scroll-x">' + playlists.map(p => renderPlaylistCard(p)).join('') + '</div>';
     } else {
         section.style.display = 'none';
     }
@@ -1520,7 +1520,7 @@ async function loadPlaylistHistorySection() {
     const history = await loadPlaylistHistory();
     if (history && history.length > 0) {
         section.style.display = 'block';
-        displayPlaylists(history, 'playlistHistoryContainer');
+        container.innerHTML = '<div class="scroll-x">' + history.map(p => renderPlaylistCard(p)).join('') + '</div>';
     } else {
         section.style.display = 'none';
     }
