@@ -36,7 +36,6 @@ async function login() {
             updateUserUI();
             closeLoginModal();
             showToast('Login successful!', 'success');
-            loadVideos();
             loadSaved();
             loadHistory();
         } else {
@@ -611,9 +610,13 @@ function displayVideos(videos) {
 function filterAndDisplayVideos() {
     let filtered = [...allVideos];
     if (searchTerm) {
+        const term = searchTerm;
         filtered = filtered.filter(v =>
-            v.originalFilename.toLowerCase().includes(searchTerm) ||
-            (v.aiLabel && v.aiLabel.toLowerCase().includes(searchTerm))
+            (v.title && v.title.toLowerCase().includes(term)) ||
+            v.originalFilename.toLowerCase().includes(term) ||
+            (v.username && v.username.toLowerCase().includes(term)) ||
+            (v.description && v.description.toLowerCase().includes(term)) ||
+            (v.aiLabel && v.aiLabel.toLowerCase().includes(term))
         );
     }
     if (currentCategory === 'trending') {
@@ -623,9 +626,46 @@ function filterAndDisplayVideos() {
     displayVideos(filtered);
 }
 
-function searchVideos() {
-    searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    filterAndDisplayVideos();
+function performSearch(query) {
+    searchTerm = query.toLowerCase();
+    if (!query) { filterAndDisplayVideos(); return; }
+    fetch(`${API_BASE}/videos/search?q=${encodeURIComponent(query)}`, {
+        headers: authToken ? { 'Authorization': 'Bearer ' + authToken } : {}
+    })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(videos => {
+        const container = document.getElementById('videosContainer');
+        if (videos.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">No videos found for "' + escapeXml(query) + '"</div>';
+            return;
+        }
+        allVideos = videos;
+        allVideos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        displayVideos(allVideos);
+    })
+    .catch(() => {
+        // On search page, allVideos isn't loaded so fallback to client filter won't work
+        if (window.location.pathname.includes('search.html')) {
+            document.getElementById('videosContainer').innerHTML = '<div style="text-align:center;padding:40px;color:#888;">Search is temporarily unavailable. Try again later.</div>';
+        } else {
+            filterAndDisplayVideos();
+        }
+    });
+}
+
+async function searchVideos() {
+    const q = document.getElementById('searchInput').value.trim();
+    performSearch(q);
+}
+
+function searchKeydown(e) {
+    if (e.key === 'Enter') {
+        const q = document.getElementById('searchInput').value.trim();
+        if (q) {
+            e.preventDefault();
+            window.location.href = 'search.html?q=' + encodeURIComponent(q);
+        }
+    }
 }
 
 function showCategory(category) {
@@ -742,7 +782,7 @@ document.addEventListener('mouseover', (e) => {
             try {
                 await videoPreview.play();
             } catch (err) {
-                console.log('Preview play failed:', err);
+                // Browser autoplay policy - harmless
             }
         }
     }, 500);
@@ -987,29 +1027,33 @@ searchInput.value = '';
 searchInput.blur();
 searchTerm = '';
 
-// Clear multiple times with increasing delays
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 0);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 50);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 100);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 300);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 500);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 1000);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 2000);
-setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 5000);
+if (!window.location.pathname.includes('search.html')) {
+    // Clear multiple times with increasing delays
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 0);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 50);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 100);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 300);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 500);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 1000);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 2000);
+    setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 5000);
 
-loadVideos();
-if (!authToken) {
-    const loginModal = document.getElementById('loginModal');
-    const watchPage = document.getElementById('playerWrapper');
-    if (loginModal && !watchPage) {
-        showLogin();
+    loadVideos();
+    if (!authToken) {
+        const loginModal = document.getElementById('loginModal');
+        const watchPage = document.getElementById('playerWrapper');
+        if (loginModal && !watchPage) {
+            showLogin();
+        }
     }
+    else updateUserUI();
+    loadSaved();
+    loadHistory();
+    setInterval(loadVideos, 15000);
+    setInterval(() => { if (authToken) { loadSaved(); loadHistory(); } }, 30000);
+} else {
+    if (authToken) updateUserUI();
 }
-else updateUserUI();
-loadSaved();
-loadHistory();
-setInterval(loadVideos, 15000);
-setInterval(() => { if (authToken) { loadSaved(); loadHistory(); } }, 30000);
 
 // ============ @Mention Autocomplete (for description fields) ============
 let mentionTimeout = null;

@@ -689,7 +689,7 @@ async function markAllNotificationsRead() {
 function handleSearch(e) {
     if (e.key === 'Enter') {
         const term = document.getElementById('searchInput').value.trim();
-        if (term) window.location.href = `index.html?search=${encodeURIComponent(term)}`;
+        if (term) window.location.href = `search.html?q=${encodeURIComponent(term)}`;
     }
 }
 

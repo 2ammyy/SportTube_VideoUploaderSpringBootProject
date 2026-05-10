@@ -13,7 +13,7 @@
     <div class="nav-search">
         <input type="text" name="fakeuser" style="display:none" tabindex="-1">
         <input type="password" name="fakepass" style="display:none" tabindex="-1">
-        <input type="search" id="searchInput" name="q-<?= Date.now() ?>" placeholder="🔍 Search videos..." onkeyup="searchVideos()" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="0">
+        <input type="search" id="searchInput" name="q-<?= Date.now() ?>" placeholder="🔍 Search videos..." onkeyup="searchVideos()" onkeydown="searchKeydown(event)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="0">
     </div>
     <div class="nav-links">
         <a onclick="showCategory('all')">Home</a>

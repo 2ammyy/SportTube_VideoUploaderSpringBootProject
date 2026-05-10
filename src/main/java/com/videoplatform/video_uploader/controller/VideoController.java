@@ -79,26 +79,6 @@ public class VideoController {
         public String getRejectionReason() { return rejectionReason; }
     }
 
-    // Inner class for VideoUploadedEvent
-    public static class VideoUploadedEvent {
-        private final UUID videoId;
-        private final String storagePath;
-        private final long fileSize;
-        private final String contentType;
-
-        public VideoUploadedEvent(UUID videoId, String storagePath, long fileSize, String contentType) {
-            this.videoId = videoId;
-            this.storagePath = storagePath;
-            this.fileSize = fileSize;
-            this.contentType = contentType;
-        }
-
-        public UUID getVideoId() { return videoId; }
-        public String getStoragePath() { return storagePath; }
-        public long getFileSize() { return fileSize; }
-        public String getContentType() { return contentType; }
-    }
-
     @PostMapping("/upload")
     public ResponseEntity<UploadResponse> upload(
             @RequestParam("file") MultipartFile file,
@@ -114,25 +94,27 @@ public class VideoController {
             // 2. Create database record
             Video video = videoService.create(userId, file.getOriginalFilename(), tempPath, title, description, privacy);
 
-            // 3. Process directly (bypass Kafka which may not be available)
-            String permPath = storageService.moveToPermanent(tempPath, video.getId().toString());
-            String thumbPath = null;
+            // 3. Send Kafka event for AI processing pipeline
             try {
-                thumbPath = videoProcessingService.extractThumbnail(permPath, video.getId());
-            } catch (Exception thumbEx) {
-                log.warn("Thumbnail extraction failed: {}", thumbEx.getMessage());
+                com.videoplatform.video_uploader.events.VideoUploadedEvent event = new com.videoplatform.video_uploader.events.VideoUploadedEvent(
+                        video.getId(), tempPath, file.getSize(), file.getContentType());
+                kafkaTemplate.send("video.uploaded", video.getId().toString(), event);
+                log.info("Kafka event sent for video {}", video.getId());
+            } catch (Exception kafkaEx) {
+                log.warn("Kafka send failed, processing directly: {}", kafkaEx.getMessage());
+                String permPath = storageService.moveToPermanent(tempPath, video.getId().toString());
+                String thumbPath = null;
+                try { thumbPath = videoProcessingService.extractThumbnail(permPath, video.getId()); }
+                catch (Exception ignored) {}
+                videoService.updateProcessed(video.getId(), permPath, thumbPath);
+                videoService.approveVideo(video.getId(), "general_content", 0.85);
+                videoService.publish(video.getId());
+                log.info("Video {} processed directly", video.getId());
             }
-            videoService.updateProcessed(video.getId(), permPath, thumbPath);
-            videoService.approveVideo(video.getId(), "general_content", 0.85);
-            videoService.publish(video.getId());
-            log.info("Video {} processed and published directly", video.getId());
 
-            // 4. Return response
             return ResponseEntity.ok(new UploadResponse(
-                    video.getId(),
-                    "PUBLISHED",
-                    "Video uploaded and published."
-            ));
+                    video.getId(), "PENDING_AI",
+                    "Video uploaded. Processing in progress."));
 
         } catch (Exception e) {
             log.error("Upload error: {}", e.getMessage());
@@ -592,6 +574,35 @@ public class VideoController {
             return ResponseEntity.ok(Map.of("message", "Video deleted"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> searchVideos(@RequestParam("q") String query,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            UUID currentUserId = null;
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                try { currentUserId = authService.validateToken(authHeader.replace("Bearer ", "")); } catch (Exception ignored) {}
+            }
+            String term = query.toLowerCase().trim();
+            UUID uid = currentUserId;
+            List<Video> all = videoRepository.findAll();
+            List<Video> filtered = all.stream()
+                    .filter(v -> v.getPrivacy() == null || v.getPrivacy().equals("public")
+                            || (uid != null && v.getUserId().equals(uid)))
+                    .filter(v -> (v.getTitle() != null && v.getTitle().toLowerCase().contains(term))
+                            || (v.getOriginalFilename() != null && v.getOriginalFilename().toLowerCase().contains(term))
+                            || (v.getDescription() != null && v.getDescription().toLowerCase().contains(term))
+                            || (v.getAiLabel() != null && v.getAiLabel().toLowerCase().contains(term))
+                            || userRepository.findById(v.getUserId())
+                                .map(u -> u.getUsername().toLowerCase().contains(term))
+                                .orElse(false))
+                    .collect(java.util.stream.Collectors.toList());
+            List<Map<String, Object>> result = filtered.stream().map(this::enrichVideo).collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
     }
 
