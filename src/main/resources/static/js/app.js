@@ -174,6 +174,9 @@ async function playVideo(videoId, title) {
                     loadLikes(videoId);
                     loadComments(videoId);
                 }
+                // Show playlist button if logged in
+                const plBtn = document.getElementById('playerPlaylistBtn');
+                if (plBtn) plBtn.style.display = authToken ? 'inline-block' : 'none';
             }
         }
     } catch (error) {
@@ -587,6 +590,7 @@ function displayVideos(videos) {
 
                 '<div class="video-meta">' +
                     '<span>📅 ' + new Date(video.createdAt).toLocaleDateString() + '</span>' +
+                    addToPlaylistButtonHtml(video.id) +
                 '</div>' +
                 (video.aiLabel ? '<div style="font-size: 11px; color: #888;">🏷️ ' + escapeXml(video.aiLabel) + '</div>' : '') +
             '</div>' +
@@ -1049,8 +1053,10 @@ if (!window.location.pathname.includes('search.html')) {
     else updateUserUI();
     loadSaved();
     loadHistory();
+    loadSavedPlaylistsSection();
+    loadPlaylistHistorySection();
     setInterval(loadVideos, 15000);
-    setInterval(() => { if (authToken) { loadSaved(); loadHistory(); } }, 30000);
+    setInterval(() => { if (authToken) { loadSaved(); loadHistory(); loadSavedPlaylistsSection(); loadPlaylistHistorySection(); } }, 30000);
 } else {
     if (authToken) updateUserUI();
 }
@@ -1184,6 +1190,340 @@ async function goToUserProfile(username) {
         }
     } catch (e) {}
     showToast('User not found', 'error');
+}
+
+// ============ PLAYLIST FUNCTIONS ============
+
+function getAuthHeaders() {
+    return authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+}
+
+async function loadUserPlaylists(userId) {
+    try {
+        const res = await fetch(`${API_BASE}/playlists/user/${userId}`);
+        if (res.ok) return await res.json();
+        return [];
+    } catch { return []; }
+}
+
+async function loadPlaylist(playlistId) {
+    const res = await fetch(`${API_BASE}/playlists/${playlistId}`);
+    if (res.ok) return await res.json();
+    return null;
+}
+
+async function createPlaylist(name, description) {
+    const res = await fetch(`${API_BASE}/playlists`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ name, description })
+    });
+    return res.ok ? await res.json() : null;
+}
+
+async function updatePlaylist(playlistId, name, description) {
+    const res = await fetch(`${API_BASE}/playlists/${playlistId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ name, description })
+    });
+    return res.ok;
+}
+
+async function deletePlaylist(playlistId) {
+    const res = await fetch(`${API_BASE}/playlists/${playlistId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+    return res.ok;
+}
+
+async function addVideoToPlaylist(playlistId, videoId) {
+    const res = await fetch(`${API_BASE}/playlists/${playlistId}/videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ videoId })
+    });
+    return res.ok;
+}
+
+async function removeVideoFromPlaylist(playlistId, videoId) {
+    const res = await fetch(`${API_BASE}/playlists/${playlistId}/videos/${videoId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+    return res.ok;
+}
+
+async function savePlaylist(playlistId) {
+    const res = await fetch(`${API_BASE}/playlists/saved/${playlistId}`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+    });
+    return res.ok;
+}
+
+async function unsavePlaylist(playlistId) {
+    const res = await fetch(`${API_BASE}/playlists/saved/${playlistId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+    return res.ok;
+}
+
+async function loadSavedPlaylists() {
+    if (!authToken) return [];
+    try {
+        const res = await fetch(`${API_BASE}/playlists/saved`, { headers: getAuthHeaders() });
+        if (res.ok) return await res.json();
+        return [];
+    } catch { return []; }
+}
+
+async function loadPlaylistHistory() {
+    if (!authToken) return [];
+    try {
+        const res = await fetch(`${API_BASE}/playlists/history`, { headers: getAuthHeaders() });
+        if (res.ok) return await res.json();
+        return [];
+    } catch { return []; }
+}
+
+async function recordPlaylistView(playlistId) {
+    if (!authToken) return;
+    try {
+        await fetch(`${API_BASE}/playlists/history/${playlistId}`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+    } catch {}
+}
+
+// ===== Playlist UI =====
+
+function renderPlaylistCard(playlist) {
+    const thumbnails = playlist.thumbnails || [];
+    const previewHtml = thumbnails.length > 0
+        ? thumbnails.map(t => t ? `<img src="${API_BASE}/videos/${t}/thumbnail" alt="" onerror="this.style.display='none'">` : '<div class="pl-thumb-placeholder">🎬</div>').join('')
+        : '<div class="pl-thumb-placeholder">🎬</div>';
+    return '<div class="playlist-card" onclick="window.location.href=\'playlist.html?id=' + playlist.id + '\'">' +
+        '<div class="pl-thumbnails">' + previewHtml + '</div>' +
+        '<div class="pl-info">' +
+        '<div class="pl-name">' + escapeXml(playlist.name) + '</div>' +
+        '<div class="pl-meta">' + (playlist.videoCount || 0) + ' videos' +
+        (playlist.username ? ' · ' + escapeXml(playlist.username) : '') + '</div>' +
+        '</div></div>';
+}
+
+function displayPlaylists(playlists, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (!playlists || playlists.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">No playlists yet.</div>';
+        return;
+    }
+    container.innerHTML = '<div class="playlist-grid">' + playlists.map(renderPlaylistCard).join('') + '</div>';
+}
+
+// ===== Create Playlist Modal =====
+
+function showCreatePlaylistModal(onCreated) {
+    const existing = document.getElementById('createPlaylistModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'createPlaylistModal';
+    modal.className = 'modal';
+    modal.innerHTML =
+        '<span class="close-btn" onclick="this.parentElement.remove()">&times;</span>' +
+        '<div class="modal-content">' +
+        '<div class="modal-header">Create Playlist</div>' +
+        '<input type="text" id="newPlaylistName" placeholder="Playlist name" style="width:100%;padding:10px;margin-bottom:10px;border-radius:6px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:inherit;box-sizing:border-box;">' +
+        '<textarea id="newPlaylistDesc" rows="2" placeholder="Description (optional)" style="width:100%;padding:10px;border-radius:6px;border:1px solid #333;background:#1a1a2e;color:#fff;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>' +
+        '<div class="modal-buttons">' +
+        '<button class="btn-secondary" onclick="this.closest(\'.modal\').remove()">Cancel</button>' +
+        '<button class="btn-primary" id="createPlaylistBtn" onclick="submitCreatePlaylist()">Create</button>' +
+        '</div></div>';
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    window._onPlaylistCreated = onCreated || null;
+    setTimeout(() => document.getElementById('newPlaylistName').focus(), 100);
+}
+
+async function submitCreatePlaylist() {
+    const name = document.getElementById('newPlaylistName').value.trim();
+    if (!name) { showToast('Please enter a name', 'error'); return; }
+    const desc = document.getElementById('newPlaylistDesc').value.trim();
+    document.getElementById('createPlaylistBtn').disabled = true;
+    const result = await createPlaylist(name, desc);
+    if (result) {
+        showToast('Playlist created!', 'success');
+        document.getElementById('createPlaylistModal').remove();
+        if (window._onPlaylistCreated) window._onPlaylistCreated(result);
+        window._onPlaylistCreated = null;
+    } else {
+        showToast('Failed to create playlist', 'error');
+        document.getElementById('createPlaylistBtn').disabled = false;
+    }
+}
+
+// ===== Add to Playlist Modal =====
+
+async function showAddToPlaylistModal(videoId) {
+    if (!authToken) { showToast('Please login first', 'error'); return; }
+    const existing = document.getElementById('addToPlaylistModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'addToPlaylistModal';
+    modal.className = 'modal';
+    modal.innerHTML =
+        '<span class="close-btn" onclick="this.parentElement.remove()">&times;</span>' +
+        '<div class="modal-content">' +
+        '<div class="modal-header">Add to Playlist</div>' +
+        '<div id="playlistSelection" style="max-height:300px;overflow-y:auto;">Loading...</div>' +
+        '<div class="modal-buttons">' +
+        '<button class="btn-primary" onclick="showCreatePlaylistModal(function(p){addVideoToPlaylist(p.id,\'' + videoId + '\').then(function(ok){if(ok){showToast(\'Added!\',\'success\');document.getElementById(\'addToPlaylistModal\').remove();}else{showToast(\'Failed\',\'error\');}});})">+ New Playlist</button>' +
+        '</div></div>';
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+
+    const playlists = await loadUserPlaylists(currentUser ? currentUser.id : '');
+    const div = document.getElementById('playlistSelection');
+    if (!playlists || playlists.length === 0) {
+        div.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">No playlists yet.</div>';
+        return;
+    }
+    div.innerHTML = playlists.map(p =>
+        '<div class="pl-select-item" onclick="addToPlaylistClick(\'' + p.id + '\',\'' + videoId + '\')">' +
+        '<span>' + escapeXml(p.name) + '</span><span style="color:#888;font-size:12px;">' + (p.videoCount || 0) + ' videos</span></div>'
+    ).join('');
+}
+
+async function addToPlaylistClick(playlistId, videoId) {
+    const ok = await addVideoToPlaylist(playlistId, videoId);
+    if (ok) {
+        showToast('Added to playlist!', 'success');
+        document.getElementById('addToPlaylistModal').remove();
+    } else {
+        showToast('Failed or already in playlist', 'error');
+    }
+}
+
+// ===== Edit Playlist Modal =====
+
+async function showEditPlaylistModal(playlistId) {
+    if (!authToken) return;
+    const existing = document.getElementById('editPlaylistModal');
+    if (existing) existing.remove();
+
+    const playlist = await loadPlaylist(playlistId);
+    if (!playlist) { showToast('Playlist not found', 'error'); return; }
+
+    const modal = document.createElement('div');
+    modal.id = 'editPlaylistModal';
+    modal.className = 'modal';
+    modal.innerHTML =
+        '<span class="close-btn" onclick="this.parentElement.remove()">&times;</span>' +
+        '<div class="modal-content">' +
+        '<div class="modal-header">Edit Playlist</div>' +
+        '<input type="text" id="editPlaylistName" value="' + escapeXml(playlist.name) + '" style="width:100%;padding:10px;margin-bottom:10px;border-radius:6px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:inherit;box-sizing:border-box;">' +
+        '<textarea id="editPlaylistDesc" rows="2" style="width:100%;padding:10px;margin-bottom:10px;border-radius:6px;border:1px solid #333;background:#1a1a2e;color:#fff;resize:vertical;font-family:inherit;box-sizing:border-box;">' + escapeXml(playlist.description || '') + '</textarea>' +
+        '<div style="max-height:300px;overflow-y:auto;margin-bottom:10px;" id="editPlaylistVideos">' +
+        (playlist.videos && playlist.videos.length > 0
+            ? playlist.videos.map(v =>
+                '<div style="display:flex;align-items:center;padding:8px;border-bottom:1px solid #333;gap:10px;">' +
+                '<span style="color:#888;min-width:20px;">' + (v.position + 1) + '.</span>' +
+                '<img src="' + (v.thumbnailPath ? API_BASE + '/videos/thumbnail/' + encodeURIComponent(v.thumbnailPath) : '') + '" style="width:60px;height:40px;object-fit:cover;border-radius:4px;" onerror="this.src=\'\';this.style.display=\'none\'">' +
+                '<span style="flex:1;font-size:13px;">' + escapeXml(v.title || v.originalFilename) + '</span>' +
+                '<button class="btn-danger-small" onclick="removeVideoFromPlaylistClick(\'' + playlistId + '\',\'' + v.id + '\')">✕</button>' +
+                '</div>'
+            ).join('')
+            : '<div style="color:#888;padding:10px;">No videos in this playlist.</div>'
+        ) +
+        '</div>' +
+        '<div class="modal-buttons">' +
+        '<button class="btn-secondary" onclick="this.closest(\'.modal\').remove()">Cancel</button>' +
+        '<button class="btn-danger" onclick="deletePlaylistClick(\'' + playlistId + '\')">Delete Playlist</button>' +
+        '<button class="btn-primary" onclick="submitEditPlaylist(\'' + playlistId + '\')">Save</button>' +
+        '</div></div>';
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+}
+
+async function submitEditPlaylist(playlistId) {
+    const name = document.getElementById('editPlaylistName').value.trim();
+    if (!name) { showToast('Name cannot be empty', 'error'); return; }
+    const desc = document.getElementById('editPlaylistDesc').value.trim();
+    const ok = await updatePlaylist(playlistId, name, desc);
+    if (ok) {
+        showToast('Playlist updated!', 'success');
+        document.getElementById('editPlaylistModal').remove();
+        location.reload();
+    } else {
+        showToast('Failed to update', 'error');
+    }
+}
+
+async function removeVideoFromPlaylistClick(playlistId, videoId) {
+    const ok = await removeVideoFromPlaylist(playlistId, videoId);
+    if (ok) {
+        showToast('Video removed', 'success');
+        showEditPlaylistModal(playlistId);
+    } else {
+        showToast('Failed to remove', 'error');
+    }
+}
+
+async function deletePlaylistClick(playlistId) {
+    if (!confirm('Delete this playlist?')) return;
+    const ok = await deletePlaylist(playlistId);
+    if (ok) {
+        showToast('Playlist deleted', 'success');
+        document.getElementById('editPlaylistModal').remove();
+        location.reload();
+    } else {
+        showToast('Failed to delete', 'error');
+    }
+}
+
+// ===== Add to Playlist Button on Video Cards =====
+
+function addToPlaylistButtonHtml(videoId) {
+    if (!authToken) return '';
+    return '<button class="playlist-add-btn" onclick="event.stopPropagation();showAddToPlaylistModal(\'' + videoId + '\')" title="Add to playlist">📋</button>';
+}
+
+// ===== Load Saved Playlists Section =====
+
+async function loadSavedPlaylistsSection() {
+    if (!authToken) return;
+    const section = document.getElementById('savedPlaylistsSection');
+    const container = document.getElementById('savedPlaylistsContainer');
+    if (!section || !container) return;
+    const playlists = await loadSavedPlaylists();
+    if (playlists && playlists.length > 0) {
+        section.style.display = 'block';
+        displayPlaylists(playlists, 'savedPlaylistsContainer');
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+// ===== Load Playlist History Section =====
+
+async function loadPlaylistHistorySection() {
+    if (!authToken) return;
+    const section = document.getElementById('playlistHistorySection');
+    const container = document.getElementById('playlistHistoryContainer');
+    if (!section || !container) return;
+    const history = await loadPlaylistHistory();
+    if (history && history.length > 0) {
+        section.style.display = 'block';
+        displayPlaylists(history, 'playlistHistoryContainer');
+    } else {
+        section.style.display = 'none';
+    }
 }
 
 // Init mention autocomplete on description fields after DOM ready

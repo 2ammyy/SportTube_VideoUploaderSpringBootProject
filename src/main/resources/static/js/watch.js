@@ -76,6 +76,9 @@ async function loadVideo() {
 
         const videoEl = document.getElementById('videoPlayer');
         videoEl.src = `${API_BASE}/videos/${currentVideoId}/stream`;
+        videoEl.autoplay = true;
+        videoEl.muted = true;
+        videoEl.play().catch(() => {});
 
         if (currentVideo.description) {
             document.getElementById('descriptionText').innerHTML = renderMentions(currentVideo.description);
@@ -112,12 +115,83 @@ async function loadVideo() {
         checkSaved();
         recordWatch();
 
+        // Show playlist button if logged in
+        if (authToken) {
+            document.getElementById('playlistBtn').style.display = 'inline-block';
+        }
+
         loadLikes(currentVideoId);
         loadComments(currentVideoId);
+
+        // Load playlist sidebar if playlistId in URL
+        const plId = getQueryParam('playlistId');
+        if (plId) loadPlaylistSidebar(plId, currentVideoId);
     } catch (e) {
         console.error('Error loading video:', e);
         document.getElementById('videoTitle').textContent = 'Error loading video';
     }
+}
+
+async function loadPlaylistSidebar(playlistId, currentVideoId) {
+    try {
+        const playlist = await loadPlaylist(playlistId);
+        if (!playlist || !playlist.videos) return;
+        const sidebar = document.getElementById('playlistSidebar');
+        sidebar.style.display = 'block';
+        document.getElementById('playlistSidebarName').textContent = playlist.name;
+        document.getElementById('playlistSidebarMeta').textContent = (playlist.videoCount || 0) + ' videos';
+
+        const container = document.getElementById('playlistSidebarVideos');
+        let html = '';
+        let foundCurrent = false;
+        let nextVideoId = null;
+        playlist.videos.forEach(function(v, i) {
+            if (v.id === currentVideoId) {
+                foundCurrent = true;
+                html += '<div class="playlist-sidebar-item current">';
+            } else {
+                if (foundCurrent && !nextVideoId) nextVideoId = v.id;
+                html += '<div class="playlist-sidebar-item">';
+            }
+            html +=
+                '<div class="pl-sidebar-num">' + (i + 1) + '</div>' +
+                '<div class="pl-sidebar-thumb">' +
+                (v.thumbnailPath ? '<img src="' + API_BASE + '/videos/' + v.id + '/thumbnail" alt="">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#1a1a2e;">🎬</div>') +
+                '</div>' +
+                '<div class="pl-sidebar-info">' +
+                '<div class="pl-sidebar-title">' + esc(v.title || v.originalFilename) + '</div>' +
+                '<div class="pl-sidebar-channel">' + esc(v.username || '') + '</div>' +
+                '</div>' +
+                '</div>';
+        });
+        container.innerHTML = html;
+
+        // Click handler
+        container.querySelectorAll('.playlist-sidebar-item').forEach(function(el, i) {
+            el.addEventListener('click', function() {
+                const vid = playlist.videos[i].id;
+                window.location.href = 'watch.html?id=' + vid + '&playlistId=' + playlistId;
+            });
+        });
+
+        // Autoplay next video
+        if (nextVideoId) {
+            const videoEl = document.getElementById('videoPlayer');
+            videoEl.addEventListener('ended', function() {
+                window.location.href = 'watch.html?id=' + nextVideoId + '&playlistId=' + playlistId;
+            });
+        }
+        
+        // Record playlist view
+        if (authToken) recordPlaylistView(playlistId);
+    } catch (e) {
+        console.error('Error loading playlist sidebar:', e);
+    }
+}
+
+function getQueryParam(name) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
 }
 
 async function loadChannelInfo(userId) {

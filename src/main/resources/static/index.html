@@ -77,6 +77,24 @@
         </div>
     </div>
 
+    <div class="section" id="savedPlaylistsSection" style="display:none;">
+        <div class="section-header">
+            <h2 class="section-title">Saved Playlists</h2>
+        </div>
+        <div id="savedPlaylistsContainer">
+            <div class="loading">Loading saved playlists...</div>
+        </div>
+    </div>
+
+    <div class="section" id="playlistHistorySection" style="display:none;">
+        <div class="section-header">
+            <h2 class="section-title">Recent Playlists</h2>
+        </div>
+        <div id="playlistHistoryContainer">
+            <div class="loading">Loading playlist history...</div>
+        </div>
+    </div>
+
     <div class="section">
         <div class="section-header">
             <h2 class="section-title" id="sectionTitle">All Videos</h2>
@@ -116,6 +134,7 @@
                 </div>
             </div>
             <button class="report-btn" onclick="openReportModal()">🚩 Report</button>
+            <button class="report-btn" id="playerPlaylistBtn" onclick="showAddToPlaylistModal(currentVideoId)" style="display:none;">📋 Playlist</button>
         </div>
         <div class="interaction-section" id="interactionSection">
             <div class="comments-section">
@@ -206,6 +225,6 @@
     </div>
 </div>
 
-<script src="js/app.js?v=3"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>

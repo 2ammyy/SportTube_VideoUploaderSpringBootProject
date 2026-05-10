@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Search - VideoStream</title>
+    <title>Playlist - VideoStream</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -48,14 +48,25 @@
 </nav>
 
 <div class="container">
-    <div class="section">
-        <div class="section-header">
-            <h2 class="section-title" id="searchTitle">Search Results</h2>
+    <div id="playlistHeader" style="display:none;">
+        <div class="playlist-header">
+            <div class="playlist-header-info">
+                <h1 id="playlistName" style="margin:0 0 8px 0;"></h1>
+                <div id="playlistDescription" style="color:#aaa;margin-bottom:8px;"></div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                    <div id="playlistCreatorAvatar" class="channel-avatar" style="width:32px;height:32px;cursor:pointer;" onclick=""></div>
+                    <span id="playlistCreatorName" style="font-weight:600;cursor:pointer;"></span>
+                    <span id="playlistVideoCount" style="color:#888;font-size:13px;"></span>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn-primary" id="savePlaylistBtn" onclick="toggleSavePlaylist()"></button>
+                    <button class="btn-secondary" id="editPlaylistBtn" style="display:none;" onclick="showEditPlaylistModal(getPlaylistId())">✏ Edit</button>
+                </div>
+            </div>
         </div>
-        <div id="videosContainer">
-            <div class="loading">Searching...</div>
-        </div>
+        <div id="playlistVideosContainer" style="margin-top:20px;"></div>
     </div>
+    <div id="playlistLoading" class="loading">Loading playlist...</div>
 </div>
 
 <!-- Video Player Modal -->
@@ -179,16 +190,119 @@
 
 <script src="js/app.js?v=4"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+let _playlistData = null;
+let _isSaved = false;
+
+function getPlaylistId() {
     const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    if (q) {
-        document.getElementById('searchInput').value = q;
-        document.getElementById('searchTitle').textContent = 'Search results for "' + q + '"';
-        performSearch(q);
-    } else {
-        document.getElementById('videosContainer').innerHTML = '<div style="text-align:center;padding:40px;color:#888;">Enter a search term to find videos.</div>';
+    return params.get('id');
+}
+
+async function loadPlaylistPage() {
+    const id = getPlaylistId();
+    if (!id) {
+        document.getElementById('playlistLoading').textContent = 'No playlist ID specified.';
+        return;
     }
+    const playlist = await loadPlaylist(id);
+    if (!playlist) {
+        document.getElementById('playlistLoading').textContent = 'Playlist not found.';
+        return;
+    }
+    _playlistData = playlist;
+    document.getElementById('playlistLoading').style.display = 'none';
+    document.getElementById('playlistHeader').style.display = 'block';
+
+    document.getElementById('playlistName').textContent = playlist.name;
+    document.getElementById('playlistDescription').textContent = playlist.description || '';
+    document.getElementById('playlistVideoCount').textContent = (playlist.videoCount || 0) + ' videos';
+
+    // Creator
+    const creatorAvatar = document.getElementById('playlistCreatorAvatar');
+    const creatorName = document.getElementById('playlistCreatorName');
+    if (playlist.avatarPath) {
+        creatorAvatar.innerHTML = '<img src="' + API_BASE + '/auth/users/' + playlist.userId + '/avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\'">';
+    }
+    creatorAvatar.style.background = playlist.avatarColor || '#667eea';
+    if (!playlist.avatarPath) {
+        creatorAvatar.textContent = (playlist.username || 'U')[0].toUpperCase();
+    }
+    creatorName.textContent = playlist.username || 'Unknown';
+    creatorAvatar.onclick = function() { window.location.href = 'profile.html?userId=' + playlist.userId; };
+    creatorName.onclick = function() { window.location.href = 'profile.html?userId=' + playlist.userId; };
+
+    // Edit button for owner
+    if (currentUser && currentUser.id === playlist.userId) {
+        document.getElementById('editPlaylistBtn').style.display = 'inline-block';
+    }
+
+    // Save button
+    updateSaveButton();
+
+    // Videos
+    const container = document.getElementById('playlistVideosContainer');
+    if (playlist.videos && playlist.videos.length > 0) {
+        let html = '<div class="playlist-video-list">';
+        playlist.videos.forEach(function(v, i) {
+            html +=
+                '<div class="playlist-video-item" onclick="window.location.href=\'watch.html?id=' + v.id + '&playlistId=' + id + '\'">' +
+                '<div class="pl-video-num">' + (i + 1) + '</div>' +
+                '<div class="pl-video-thumb">' +
+                (v.thumbnailPath ? '<img src="' + API_BASE + '/videos/' + v.id + '/thumbnail" alt="">' : '<div class="pl-thumb-placeholder" style="width:100%;height:100%;">🎬</div>') +
+                '</div>' +
+                '<div class="pl-video-info">' +
+                '<div class="pl-video-title">' + escapeXml(v.title || v.originalFilename) + '</div>' +
+                '<div class="pl-video-channel">' + escapeXml(v.username || 'Unknown') + '</div>' +
+                '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">This playlist has no videos yet.</div>';
+    }
+
+    // Record view in history
+    if (authToken) recordPlaylistView(id);
+    // Check if saved
+    checkIfSaved();
+}
+
+async function checkIfSaved() {
+    if (!authToken) return;
+    const saved = await loadSavedPlaylists();
+    _isSaved = saved && saved.some(function(s) { return s.id === getPlaylistId() || (typeof s === 'object' && s.id === getPlaylistId()); });
+    // Actually check by playlist id
+    _isSaved = saved && saved.some(function(s) { return s.id === getPlaylistId(); });
+    updateSaveButton();
+}
+
+function updateSaveButton() {
+    const btn = document.getElementById('savePlaylistBtn');
+    if (!btn) return;
+    if (_isSaved) {
+        btn.textContent = '★ Saved';
+        btn.className = 'btn-primary saved';
+    } else {
+        btn.textContent = '☆ Save';
+        btn.className = 'btn-primary';
+    }
+}
+
+async function toggleSavePlaylist() {
+    if (!authToken) { showToast('Please login', 'error'); return; }
+    const id = getPlaylistId();
+    if (_isSaved) {
+        const ok = await unsavePlaylist(id);
+        if (ok) { _isSaved = false; updateSaveButton(); showToast('Removed from saved', 'success'); }
+    } else {
+        const ok = await savePlaylist(id);
+        if (ok) { _isSaved = true; updateSaveButton(); showToast('Playlist saved!', 'success'); }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(loadPlaylistPage, 100);
 });
 </script>
 </body>

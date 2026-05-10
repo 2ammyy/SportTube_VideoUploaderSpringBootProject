@@ -55,6 +55,16 @@
             <div class="loading">Loading videos...</div>
         </div>
     </div>
+
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Playlists</h2>
+            <a href="#" class="section-link" onclick="showCreatePlaylistModal(function(){location.reload()})">+ New Playlist</a>
+        </div>
+        <div id="profilePlaylists">
+            <div class="loading">Loading playlists...</div>
+        </div>
+    </div>
 </div>
 
 <!-- Edit Video Modal -->
@@ -117,7 +127,7 @@
     </div>
 </div>
 
-<script src="js/app.js?v=3"></script>
+<script src="js/app.js?v=4"></script>
 <script>
 const COLORS = ['#667eea','#e50914','#4caf50','#2196f3','#ff9800','#9c27b0','#f44336','#00bcd4','#e91e63','#3f51b5','#009688','#ff5722'];
 
@@ -192,6 +202,17 @@ async function loadProfile() {
         }
     } catch (e) {
         document.getElementById('profileVideos').innerHTML = '<div class="loading">Failed to load videos</div>';
+    }
+
+    // Load playlists
+    try {
+        const plRes = await fetch(`${API_BASE}/playlists/user/${profileUserId}`);
+        if (plRes.ok) {
+            const playlists = await plRes.json();
+            displayPlaylists(playlists, 'profilePlaylists');
+        }
+    } catch (e) {
+        document.getElementById('profilePlaylists').innerHTML = '<div class="loading">Failed to load playlists</div>';
     }
 }
 

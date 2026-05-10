@@ -47,7 +47,7 @@
 <div class="watch-container">
     <div class="watch-main">
         <div class="video-player-wrapper" id="playerWrapper">
-            <video id="videoPlayer" controls preload="metadata">
+            <video id="videoPlayer" controls autoplay muted preload="metadata">
                 Your browser does not support the video tag.
             </video>
             <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶</button>
@@ -67,6 +67,7 @@
                     </button>
                 </div>
                 <button class="action-btn" onclick="shareVideo()">Share</button>
+                <button class="action-btn" id="playlistBtn" onclick="showAddToPlaylistModal(currentVideoId)" style="display:none;">+ Playlist</button>
                 <button class="action-btn" onclick="openReportModal()" id="reportBtn">Report</button>
             </div>
         </div>
@@ -134,6 +135,13 @@
     </div>
 
     <div class="watch-sidebar">
+        <div id="playlistSidebar" style="display:none;">
+            <div class="playlist-sidebar-header">
+                <h4 id="playlistSidebarName" style="margin:0 0 4px 0;font-size:14px;"></h4>
+                <div style="font-size:12px;color:#888;" id="playlistSidebarMeta"></div>
+            </div>
+            <div id="playlistSidebarVideos" style="max-height:400px;overflow-y:auto;"></div>
+        </div>
         <h3 class="sidebar-title">Recommended</h3>
         <div id="recommendedVideos"></div>
     </div>
@@ -154,7 +162,7 @@
     </div>
 </div>
 
-<script src="js/app.js?v=3"></script>
-<script src="js/watch.js?v=3"></script>
+<script src="js/app.js?v=4"></script>
+<script src="js/watch.js?v=4"></script>
 </body>
 </html>
