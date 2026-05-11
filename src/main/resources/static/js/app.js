@@ -1370,6 +1370,10 @@ async function submitCreatePlaylist() {
     const name = document.getElementById('newPlaylistName').value.trim();
     if (!name) { showToast('Please enter a name', 'error'); return; }
     const desc = document.getElementById('newPlaylistDesc').value.trim();
+    if (await checkContent(name) || (desc && await checkContent(desc))) {
+        showToast('This content violates community guidelines', 'error');
+        return;
+    }
     document.getElementById('createPlaylistBtn').disabled = true;
     const result = await createPlaylist(name, desc);
     if (result) {
@@ -1471,6 +1475,10 @@ async function submitEditPlaylist(playlistId) {
     const name = document.getElementById('editPlaylistName').value.trim();
     if (!name) { showToast('Name cannot be empty', 'error'); return; }
     const desc = document.getElementById('editPlaylistDesc').value.trim();
+    if (await checkContent(name) || (desc && await checkContent(desc))) {
+        showToast('This content violates community guidelines', 'error');
+        return;
+    }
     const ok = await updatePlaylist(playlistId, name, desc);
     if (ok) {
         showToast('Playlist updated!', 'success');

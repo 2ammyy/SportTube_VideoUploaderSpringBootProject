@@ -3,6 +3,7 @@ package com.videoplatform.video_uploader.controller;
 import com.videoplatform.video_uploader.model.*;
 import com.videoplatform.video_uploader.repository.*;
 import com.videoplatform.video_uploader.service.AuthService;
+import com.videoplatform.video_uploader.service.ModerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,7 @@ public class PlaylistController {
     private final VideoRepository videoRepository;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final ModerationService moderationService;
 
     // ==================== CRUD ====================
 
@@ -37,9 +39,13 @@ public class PlaylistController {
             if (name == null || name.trim().isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Playlist name is required"));
             }
+            String description = body.getOrDefault("description", "");
+            if (moderationService.isFlagged(name) || (!description.isEmpty() && moderationService.isFlagged(description))) {
+                return ResponseEntity.badRequest().body(Map.of("error", "This content violates community guidelines"));
+            }
             Playlist playlist = new Playlist();
             playlist.setName(name.trim());
-            playlist.setDescription(body.getOrDefault("description", ""));
+            playlist.setDescription(description);
             playlist.setUserId(userId);
             playlist = playlistRepository.save(playlist);
             return ResponseEntity.ok(playlistToMap(playlist));
@@ -64,10 +70,17 @@ public class PlaylistController {
                 if (name.trim().isEmpty()) {
                     return ResponseEntity.badRequest().body(Map.of("error", "Playlist name cannot be empty"));
                 }
+                if (moderationService.isFlagged(name)) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "This name violates community guidelines"));
+                }
                 playlist.setName(name.trim());
             }
             if (body.containsKey("description")) {
-                playlist.setDescription(body.get("description"));
+                String desc = body.get("description");
+                if (desc != null && !desc.trim().isEmpty() && moderationService.isFlagged(desc)) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "This description violates community guidelines"));
+                }
+                playlist.setDescription(desc);
             }
             playlist.setUpdatedAt(LocalDateTime.now());
             playlist = playlistRepository.save(playlist);

@@ -743,6 +743,10 @@ async function saveSettings() {
     const privacy = document.getElementById('editPrivacy').value;
     const description = document.getElementById('editDescriptionFull').value.trim();
 
+    if (title && await checkContent(title)) {
+        showToast('This title violates community guidelines', 'error');
+        return;
+    }
     if (description && await checkContent(description)) {
         if (warning) warning.style.display = 'block';
         return;

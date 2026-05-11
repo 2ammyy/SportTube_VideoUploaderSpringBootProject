@@ -90,6 +90,10 @@ public class VideoController {
             @RequestParam(value = "privacy", required = false) String privacy) {
 
         try {
+            if (moderationService.isFlagged(title) || (description != null && !description.isEmpty() && moderationService.isFlagged(description))) {
+                return ResponseEntity.badRequest().build();
+            }
+
             // 1. Save temp file to storage
             String tempPath = storageService.uploadTemp(file);
 
