@@ -1177,6 +1177,22 @@ function renderMentions(text) {
     return div.innerHTML.replace(/@(\w+)/g, '<a href="#" class="mention-link" onclick="event.preventDefault();goToUserProfile(\'$1\')">@$1</a>');
 }
 
+async function checkContent(text) {
+    if (!text || !text.trim()) return false;
+    try {
+        const res = await fetch(`${API_BASE}/videos/moderate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            return data.flagged;
+        }
+    } catch (e) {}
+    return false;
+}
+
 async function goToUserProfile(username) {
     try {
         const res = await fetch(`${API_BASE}/auth/users/search?q=${encodeURIComponent(username)}`);

@@ -481,6 +481,13 @@ function attachMentionHandlers(inputEl, onEnter) {
 
 function setupMentionAutocomplete() {
     attachMentionHandlers(document.getElementById('commentInput'), addComment);
+    const commentInput = document.getElementById('commentInput');
+    if (commentInput) {
+        commentInput.addEventListener('input', function() {
+            const warning = document.getElementById('commentWarning');
+            if (warning) warning.style.display = 'none';
+        });
+    }
 }
 
 function showMentionDropdown(input, prefix) {
@@ -547,12 +554,18 @@ document.addEventListener('click', function(e) {
 });
 
 async function addComment() {
-    console.log('addComment called from watch.js');
+    const warning = document.getElementById('commentWarning');
+    if (warning) warning.style.display = 'none';
     if (!requireAuth()) return;
     if (!currentVideoId) return;
     const input = document.getElementById('commentInput');
     const content = input.value.trim();
     if (!content) return;
+
+    if (await checkContent(content)) {
+        if (warning) warning.style.display = 'block';
+        return;
+    }
 
     try {
         const res = await fetch(`${API_BASE}/videos/${currentVideoId}/comments`, {
@@ -568,15 +581,21 @@ async function addComment() {
             loadComments(currentVideoId);
             showToast('Comment added', 'success');
         } else {
-            const text = await res.text().catch(() => '');
-            if (text.includes('Invalid token')) {
+            let errMsg = 'Failed to add comment';
+            try {
+                const errData = await res.json();
+                errMsg = errData.error || errMsg;
+            } catch (_) {}
+            if (errMsg.includes('Invalid token')) {
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('currentUser');
                 authToken = null;
                 currentUser = null;
                 showToast('Session expired, please login again', 'error');
+            } else if (errMsg.includes('guidelines')) {
+                if (warning) warning.style.display = 'block';
             } else {
-                showToast(text || 'Failed to add comment', 'error');
+                showToast(errMsg, 'error');
             }
         }
     } catch (e) {
@@ -708,6 +727,8 @@ function openSettings() {
     document.getElementById('editPrivacy').value = currentVideo.privacy || 'public';
     document.getElementById('editDescriptionFull').value = currentVideo.description || '';
     document.getElementById('settingsPanel').scrollIntoView({ behavior: 'smooth' });
+    const warn = document.getElementById('descriptionWarning');
+    if (warn) warn.style.display = 'none';
 }
 
 function closeSettings() {
@@ -716,9 +737,16 @@ function closeSettings() {
 
 async function saveSettings() {
     if (!requireAuth() || !isOwner) return;
+    const warning = document.getElementById('descriptionWarning');
+    if (warning) warning.style.display = 'none';
     const title = document.getElementById('editTitle').value.trim();
     const privacy = document.getElementById('editPrivacy').value;
     const description = document.getElementById('editDescriptionFull').value.trim();
+
+    if (description && await checkContent(description)) {
+        if (warning) warning.style.display = 'block';
+        return;
+    }
 
     try {
         const res = await fetch(`${API_BASE}/videos/${currentVideoId}/settings`, {
@@ -741,7 +769,16 @@ async function saveSettings() {
             closeSettings();
             showToast('Settings saved', 'success');
         } else {
-            showToast('Failed to save settings', 'error');
+            let errMsg = 'Failed to save settings';
+            try {
+                const errData = await res.json();
+                errMsg = errData.error || errMsg;
+            } catch (_) {}
+            if (errMsg.includes('guidelines')) {
+                if (warning) warning.style.display = 'block';
+            } else {
+                showToast(errMsg, 'error');
+            }
         }
     } catch (e) {
         showToast('Error saving settings', 'error');

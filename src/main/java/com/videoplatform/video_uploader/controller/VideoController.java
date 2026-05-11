@@ -3,6 +3,7 @@ package com.videoplatform.video_uploader.controller;
 import com.videoplatform.video_uploader.model.*;
 import com.videoplatform.video_uploader.repository.*;
 import com.videoplatform.video_uploader.service.AuthService;
+import com.videoplatform.video_uploader.service.ModerationService;
 import com.videoplatform.video_uploader.service.StorageService;
 import com.videoplatform.video_uploader.service.VideoProcessingService;
 import com.videoplatform.video_uploader.service.VideoService;
@@ -41,6 +42,7 @@ public class VideoController {
     private final WatchHistoryRepository watchHistoryRepository;
     private final SavedVideoRepository savedVideoRepository;
     private final UserRepository userRepository;
+    private final ModerationService moderationService;
 
     // Inner class for upload response
     public static class UploadResponse {
@@ -157,10 +159,14 @@ public class VideoController {
             if (!video.getUserId().equals(userId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Not your video"));
             }
+            String description = request.get("description");
+            if (description != null && !description.trim().isEmpty() && moderationService.isFlagged(description)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "This description violates community guidelines"));
+            }
             Video updated = videoService.updateVideoSettings(
                     id,
                     request.get("title"),
-                    request.get("description"),
+                    description,
                     request.get("privacy")
             );
             return ResponseEntity.ok(updated);
@@ -269,18 +275,35 @@ public class VideoController {
 
     // ============ COMMENTS ENDPOINTS ============
 
+    @PostMapping("/moderate")
+    public ResponseEntity<?> moderate(@RequestBody Map<String, String> request) {
+        String text = request.get("text");
+        if (text == null || text.trim().isEmpty()) {
+            return ResponseEntity.ok(Map.of("flagged", false));
+        }
+        boolean flagged = moderationService.isFlagged(text);
+        return ResponseEntity.ok(Map.of("flagged", flagged));
+    }
+
     @PostMapping("/{id}/comments")
     public ResponseEntity<?> addComment(@PathVariable UUID id, @RequestBody Map<String, String> request, @RequestHeader("Authorization") String token) {
         try {
             UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            String content = request.get("content");
+            if (content == null || content.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Comment cannot be empty"));
+            }
+            if (moderationService.isFlagged(content)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "This comment violates community guidelines"));
+            }
             Comment comment = new Comment();
             comment.setVideoId(id);
             comment.setUserId(userId);
-            comment.setContent(request.get("content"));
+            comment.setContent(content);
             commentRepository.save(comment);
             return ResponseEntity.ok(comment);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 

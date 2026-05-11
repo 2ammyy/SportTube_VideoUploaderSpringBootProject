@@ -1331,3 +1331,14 @@ body {
     width: 240px;
     scroll-snap-align: start;
 }
+
+/* ============ Content Moderation Warning ============ */
+.mod-warning {
+    background: rgba(229, 9, 20, 0.15);
+    border: 1px solid #e50914;
+    color: #e50914;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-top: 8px;
+}

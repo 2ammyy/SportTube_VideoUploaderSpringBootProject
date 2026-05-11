@@ -116,6 +116,7 @@
                 <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
                 <button class="btn-primary" onclick="saveSettings()">Save Changes</button>
             </div>
+            <div id="descriptionWarning" class="mod-warning" style="display:none;">⚠️ This description violates our community guidelines and cannot be saved.</div>
         </div>
 
         <div class="comments-section-main">
@@ -128,6 +129,7 @@
                         <button class="btn-secondary" onclick="document.getElementById('commentInput').value=''">Cancel</button>
                         <button class="btn-primary" id="submitCommentBtn">Comment</button>
                     </div>
+                    <div id="commentWarning" class="mod-warning" style="display:none;">⚠️ This content violates our community guidelines and cannot be posted.</div>
                 </div>
             </div>
             <div id="commentsList"></div>
