@@ -13,6 +13,7 @@ import com.videoplatform.video_uploader.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ public class SocialController {
     // ============ SUBSCRIBE ============
 
     @PostMapping("/channels/{channelId}/subscribe")
+    @Transactional
     public ResponseEntity<?> subscribe(@PathVariable UUID channelId, @RequestHeader("Authorization") String token) {
         try {
             UUID userId = authService.validateToken(token.replace("Bearer ", ""));

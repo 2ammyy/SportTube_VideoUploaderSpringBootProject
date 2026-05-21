@@ -524,6 +524,9 @@ async function profileSubscribe() {
                     document.getElementById('profileStats').textContent = profileVideos.length + ' videos · ' + count + ' subscriber' + (count !== 1 ? 's' : '');
                 }
             } catch (e) {}
+        } else {
+            var errText = await res.text();
+            showToast(errText || 'Action failed', 'error');
         }
     } catch (e) {
         showToast('Error', 'error');
