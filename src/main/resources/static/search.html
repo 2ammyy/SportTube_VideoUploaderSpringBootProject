@@ -41,6 +41,7 @@
                 </div>
             </div>
             <a id="myChannelLink" onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
+            <a onclick="window.location.href='library.html'" style="display:none;" id="libraryLink">📚 Library</a>
             <a id="adminPanelLink" onclick="window.location.href='admin.html'" style="display:none;">🛡️ Admin Panel</a>
             <a id="loginSignupLink" onclick="showLogin()">🔐 Login / Signup</a>
             <a id="logoutLink" onclick="logout()" style="display:none;">🚪 Logout</a>
@@ -178,7 +179,7 @@
     </div>
 </div>
 
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=7"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);

@@ -43,6 +43,7 @@
                 </div>
             </div>
             <a id="myChannelLink" onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
+            <a onclick="window.location.href='library.html'" style="display:none;" id="libraryLink">📚 Library</a>
             <a id="adminPanelLink" onclick="window.location.href='admin.html'" style="display:none;">🛡️ Admin Panel</a>
             <a id="loginSignupLink" onclick="showLogin()">🔐 Login / Signup</a>
             <a id="logoutLink" onclick="logout()" style="display:none;">🚪 Logout</a>
@@ -67,42 +68,6 @@
         </div>
         <div id="recommendedContainer">
             <div class="loading">Loading recommendations...</div>
-        </div>
-    </div>
-
-    <div class="section" id="savedSection" style="display:none;">
-        <div class="section-header">
-            <h2 class="section-title">Saved Videos</h2>
-        </div>
-        <div id="savedContainer">
-            <div class="loading">Loading saved videos...</div>
-        </div>
-    </div>
-
-    <div class="section" id="historySection" style="display:none;">
-        <div class="section-header">
-            <h2 class="section-title">Watch History</h2>
-        </div>
-        <div id="historyContainer">
-            <div class="loading">Loading history...</div>
-        </div>
-    </div>
-
-    <div class="section" id="savedPlaylistsSection" style="display:none;">
-        <div class="section-header">
-            <h2 class="section-title">Saved Playlists</h2>
-        </div>
-        <div id="savedPlaylistsContainer">
-            <div class="loading">Loading saved playlists...</div>
-        </div>
-    </div>
-
-    <div class="section" id="playlistHistorySection" style="display:none;">
-        <div class="section-header">
-            <h2 class="section-title">Recent Playlists</h2>
-        </div>
-        <div id="playlistHistoryContainer">
-            <div class="loading">Loading playlist history...</div>
         </div>
     </div>
 

@@ -94,6 +94,7 @@ function updateUserUI() {
     const dropdownUserName = document.getElementById('dropdownUserName');
     const userEmail = document.getElementById('userEmail');
     const myChannelLink = document.getElementById('myChannelLink');
+    const libraryLink = document.getElementById('libraryLink');
     const loginSignupLink = document.getElementById('loginSignupLink');
     const logoutLink = document.getElementById('logoutLink');
 
@@ -114,6 +115,7 @@ function updateUserUI() {
         });
 
         if (myChannelLink) myChannelLink.style.display = '';
+        if (libraryLink) libraryLink.style.display = '';
 
         // Show admin panel link for admins
         const adminLink = document.getElementById('adminPanelLink');
@@ -146,6 +148,7 @@ function updateUserUI() {
             el.innerHTML = '👤';
         });
         if (myChannelLink) myChannelLink.style.display = 'none';
+        if (libraryLink) libraryLink.style.display = 'none';
         if (loginSignupLink) loginSignupLink.style.display = '';
         if (logoutLink) logoutLink.style.display = 'none';
     }
@@ -1181,12 +1184,8 @@ if (!window.location.pathname.includes('search.html')) {
     }
     else updateUserUI();
     loadRecommendations();
-    loadSaved();
-    loadHistory();
-    loadSavedPlaylistsSection();
-    loadPlaylistHistorySection();
     setInterval(loadVideos, 15000);
-    setInterval(() => { if (authToken) { loadRecommendations(); loadSaved(); loadHistory(); loadSavedPlaylistsSection(); loadPlaylistHistorySection(); } }, 30000);
+    setInterval(() => { if (authToken) { loadRecommendations(); } }, 30000);
 } else {
     if (authToken) updateUserUI();
 }
