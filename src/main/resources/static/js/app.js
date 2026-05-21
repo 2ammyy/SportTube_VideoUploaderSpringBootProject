@@ -4,6 +4,8 @@ let allVideos = [];
 let currentVideoId = null;
 let currentCategory = 'all';
 let searchTerm = '';
+let activeFilterType = null; // 'category' or 'entity'
+let activeFilterValue = null; // e.g. 'Tennis' or 'Wimbledon'
 let authToken = localStorage.getItem('authToken');
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 
@@ -747,7 +749,13 @@ async function loadVideos() {
     try {
         const headers = {};
         if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-        const response = await fetch(`${API_BASE}/videos/all`, { headers });
+        let url = `${API_BASE}/videos/all`;
+        if (activeFilterType === 'category' && activeFilterValue) {
+            url += `?category=${encodeURIComponent(activeFilterValue)}`;
+        } else if (activeFilterType === 'entity' && activeFilterValue) {
+            url += `?entity=${encodeURIComponent(activeFilterValue)}`;
+        }
+        const response = await fetch(url, { headers });
         if (!response.ok) throw new Error('Failed to fetch');
         allVideos = await response.json();
         allVideos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -759,9 +767,65 @@ async function loadVideos() {
     }
 }
 
-function refreshVideos() {
+async function loadFilters() {
+    try {
+        const res = await fetch(`${API_BASE}/videos/filters`);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderFilterChips(data.categories || [], data.entities || []);
+    } catch (e) {}
+}
+
+function renderFilterChips(categories, entities) {
+    const container = document.getElementById('filterChips');
+    if (!container) return;
+    if (categories.length === 0 && entities.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'flex';
+    let html = '<button class="filter-chip' + (activeFilterValue === null ? ' active' : '') + '" onclick="setFilter(null, null)">All</button>';
+    categories.forEach(cat => {
+        const active = activeFilterType === 'category' && activeFilterValue === cat;
+        html += '<button class="filter-chip' + (active ? ' active' : '') + '" onclick="setFilter(\'category\', \'' + escAttr(cat) + '\')">' + escapeXml(cat) + '</button>';
+    });
+    entities.forEach(ent => {
+        const active = activeFilterType === 'entity' && activeFilterValue === ent;
+        html += '<button class="filter-chip entity-chip' + (active ? ' active' : '') + '" onclick="setFilter(\'entity\', \'' + escAttr(ent) + '\')">#' + escapeXml(ent) + '</button>';
+    });
+    container.innerHTML = html;
+}
+
+function setFilter(type, value) {
+    if (activeFilterType === type && activeFilterValue === value) return;
+    if (type === null) {
+        activeFilterType = null;
+        activeFilterValue = null;
+    } else {
+        activeFilterType = type;
+        activeFilterValue = value;
+    }
+    const chips = document.querySelectorAll('.filter-chip');
+    chips.forEach(c => c.classList.remove('active'));
+    chips.forEach(c => {
+        if ((type === null && c.textContent === 'All') ||
+            (c.textContent === value) ||
+            (c.textContent === '#' + value)) {
+            c.classList.add('active');
+        }
+    });
     loadVideos();
+}
+
+function refreshVideos() {
+    setFilter(null, null);
+    loadFilters();
     showToast('Refreshed!', 'success');
+}
+
+function escAttr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function closeVideoPlayer() {
@@ -1107,6 +1171,7 @@ if (!window.location.pathname.includes('search.html')) {
     setTimeout(() => { searchInput.value = ''; searchTerm = ''; }, 5000);
 
     loadVideos();
+    loadFilters();
     if (!authToken) {
         const loginModal = document.getElementById('loginModal');
         const watchPage = document.getElementById('playerWrapper');

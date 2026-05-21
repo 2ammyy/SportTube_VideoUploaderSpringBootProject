@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            background: linear-gradient(135deg, #141414 0%, #1a1a1a 100%);
+            background: linear-gradient(135deg, #0a0e1a 0%, #141a2e 100%);
             color: #fff;
             min-height: 100vh;
             display: flex;
@@ -27,15 +27,16 @@
             background: rgba(0,0,0,0.85);
             border-radius: 12px;
             padding: 40px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 40px rgba(0,200,83,0.15);
         }
 
         .brand {
             text-align: center;
             font-size: 36px;
             font-weight: bold;
-            color: #e50914;
+            color: #ffd600;
             margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(255,214,0,0.3);
         }
 
         .subtitle {
@@ -65,8 +66,8 @@
         .input-group input {
             width: 100%;
             padding: 12px 15px;
-            background: #333;
-            border: 1px solid #444;
+            background: #1e2440;
+            border: 1px solid #2a3050;
             border-radius: 4px;
             color: white;
             font-size: 14px;
@@ -75,8 +76,8 @@
 
         .input-group input:focus {
             outline: none;
-            border-color: #e50914;
-            background: #444;
+            border-color: #00c853;
+            background: #1e2440;
         }
 
         .btn {
@@ -91,12 +92,13 @@
         }
 
         .btn-primary {
-            background: #e50914;
+            background: #00c853;
             color: white;
+            box-shadow: 0 2px 12px rgba(0,200,83,0.3);
         }
 
         .btn-primary:hover {
-            background: #ff1a1a;
+            background: #009624;
             transform: translateY(-2px);
         }
 
@@ -108,7 +110,7 @@
         }
 
         .switch-form a {
-            color: #e50914;
+            color: #00c853;
             text-decoration: none;
             font-weight: bold;
             cursor: pointer;
@@ -129,8 +131,8 @@
             animation: slideIn 0.3s ease;
         }
 
-        .toast.success { background: #4caf50; }
-        .toast.error { background: #f44336; }
+        .toast.success { background: #00c853; }
+        .toast.error { background: #ff1744; }
 
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }

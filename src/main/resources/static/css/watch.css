@@ -72,7 +72,7 @@
     flex-wrap: wrap;
     gap: 12px;
     padding-bottom: 16px;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid #2a3050;
 }
 
 .video-stats {
@@ -89,13 +89,13 @@
 .action-group {
     display: flex;
     gap: 0;
-    background: #2a2a2a;
+    background: #1e2440;
     border-radius: 20px;
     overflow: hidden;
 }
 
 .action-btn {
-    background: #2a2a2a;
+    background: #1e2440;
     color: #fff;
     border: none;
     padding: 8px 16px;
@@ -109,12 +109,12 @@
 }
 
 .action-btn:hover {
-    background: #3a3a3a;
+    background: #1e2440;
 }
 
 .action-group .action-btn:first-child {
     border-radius: 20px 0 0 20px;
-    border-right: 1px solid #444;
+    border-right: 1px solid #2a3050;
 }
 
 .action-group .action-btn:last-child {
@@ -127,7 +127,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 0;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid #2a3050;
 }
 
 .channel-details {
@@ -139,7 +139,7 @@
 .channel-avatar {
     width: 48px;
     height: 48px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, #00c853, #ffd600);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -160,7 +160,7 @@
 }
 
 .subscribe-btn {
-    background: #e50914;
+    background: #00c853;
     color: white;
     border: none;
     padding: 10px 24px;
@@ -172,18 +172,18 @@
 }
 
 .subscribe-btn:hover {
-    background: #ff1a25;
+    background: #009624;
 }
 
 .subscribe-btn.subscribed {
-    background: #444;
+    background: #2a3050;
     color: #ddd;
 }
 
 .save-btn {
     background: transparent;
     color: #fff;
-    border: 1px solid #555;
+    border: 1px solid #2a3050;
     padding: 10px 20px;
     border-radius: 20px;
     cursor: pointer;
@@ -197,19 +197,19 @@
     background: rgba(255,255,255,0.05);
 }
 .save-btn.saved {
-    background: #4da6ff;
-    border-color: #4da6ff;
+    background: #00c853;
+    border-color: #00c853;
     color: #fff;
 }
 
 /* ============ Description ============ */
 .video-description {
     padding: 16px 0;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid #2a3050;
 }
 
 .description-content {
-    background: #1a1a1a;
+    background: #1a2040;
     border-radius: 8px;
     padding: 12px;
 }
@@ -224,8 +224,8 @@
 
 .description-edit textarea {
     width: 100%;
-    background: #1a1a1a;
-    border: 1px solid #444;
+    background: #1a2040;
+    border: 1px solid #2a3050;
     border-radius: 8px;
     padding: 10px;
     color: #fff;
@@ -235,13 +235,13 @@
 }
 
 .description-edit textarea:focus {
-    border-color: #e50914;
+    border-color: #00c853;
 }
 
 /* ============ Settings Panel ============ */
 .settings-panel {
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: #1a2040;
+    border: 1px solid #2a3050;
     border-radius: 12px;
     padding: 20px;
     margin: 20px 0;
@@ -274,8 +274,8 @@
 .setting-group input,
 .setting-group select,
 .setting-group textarea {
-    background: #2a2a2a;
-    border: 1px solid #444;
+    background: #1e2440;
+    border: 1px solid #2a3050;
     border-radius: 8px;
     padding: 10px;
     color: #fff;
@@ -287,7 +287,7 @@
 .setting-group input:focus,
 .setting-group select:focus,
 .setting-group textarea:focus {
-    border-color: #e50914;
+    border-color: #00c853;
 }
 
 .setting-group select {
@@ -300,12 +300,12 @@
     gap: 10px;
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid #333;
+    border-top: 1px solid #2a3050;
 }
 
 #editVideoBtn {
     margin-left: 12px;
-    background: #333;
+    background: #2a3050;
     color: #fff;
     border: none;
     padding: 8px 16px;
@@ -316,7 +316,7 @@
 }
 
 #editVideoBtn:hover {
-    background: #444;
+    background: #3a4060;
 }
 
 /* ============ Responsive ============ */
@@ -340,7 +340,7 @@
 .user-avatar-small {
     width: 36px;
     height: 36px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, #00c853, #ffd600);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -354,14 +354,14 @@
     padding: 8px 0;
     background: transparent;
     border: none;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid #2a3050;
     color: #fff;
     font-size: 14px;
     outline: none;
 }
 
 .comment-input-main input:focus {
-    border-bottom-color: #e50914;
+    border-bottom-color: #00c853;
 }
 
 .comment-actions {
@@ -380,13 +380,13 @@
     display: flex;
     gap: 12px;
     padding: 12px 0;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid #1a2040;
 }
 
 .comment-item .comment-user-avatar {
     width: 36px;
     height: 36px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, #00c853, #ffd600);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -423,7 +423,7 @@
 }
 
 #mentionDropdown .mention-item:hover {
-    background: #333 !important;
+    background: #2a3050 !important;
 }
 
 .comment-item .comment-date {
@@ -462,8 +462,8 @@
 }
 
 .btn-comment-delete:hover {
-    color: #e50914;
-    background: rgba(229,9,20,0.1);
+    color: #ff1744;
+    background: rgba(255,23,68,0.1);
 }
 
 .btn-comment-reply {
@@ -509,7 +509,7 @@
 }
 
 .comment-reply-item {
-    border-left: 2px solid #333;
+    border-left: 2px solid #2a3050;
     padding-left: 12px;
     margin-top: 8px;
 }
@@ -526,7 +526,7 @@
 }
 
 .edit-comment-input:focus {
-    border-color: #e50914 !important;
+    border-color: #00c853 !important;
     outline: none;
 }
 
@@ -556,7 +556,7 @@
     overflow: hidden;
     flex-shrink: 0;
     position: relative;
-    background: #222;
+    background: #1a2040;
 }
 
 .recommended-thumbnail img {

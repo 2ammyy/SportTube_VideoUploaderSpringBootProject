@@ -217,8 +217,66 @@ public class VideoController {
         return map;
     }
 
+    @GetMapping("/filters")
+    public ResponseEntity<?> getFilters() {
+        try {
+            List<String> categories = videoRepository.findDistinctCategories();
+            List<String> allCategories = new ArrayList<>(java.util.Arrays.asList(
+                "Football", "Basketball", "Tennis", "Handball", "Volleyball",
+                "Baseball", "Rugby", "Cricket", "Golf", "Boxing", "Swimming",
+                "Cycling", "Winter Sports", "Athletics", "Motorsport", "General Sports"
+            ));
+            allCategories.retainAll(categories);
+
+            List<Video> all = videoRepository.findAll();
+            Set<String> entities = new HashSet<>();
+            Set<String> stopWords = new HashSet<>(java.util.Arrays.asList(
+                "The","A","An","This","That","These","Those","My","Your","His","Her",
+                "Its","Our","Their","And","Or","But","For","With","Without","From",
+                "To","In","On","At","By","Of","Is","Are","Was","Were","Be","Been",
+                "Being","Have","Has","Had","Do","Does","Did","Will","Would","Could",
+                "Should","May","Might","Shall","Can","Not","No","Yes","All","Each",
+                "Every","Both","Few","Many","Much","Some","Any","How","What","When",
+                "Where","Why","Who","Whom","Which","It","Up","Out","Off","Over",
+                "Under","Into","Through","During","Before","After","Above","Below",
+                "Between","Ago","Now","Here","There","Then","Just","Also","Very",
+                "Too","So","More","Most","Less","Least","Than","Then","Once"
+            ));
+            Set<String> categoryNames = new HashSet<>(allCategories);
+            categoryNames.add("Sports");
+            categoryNames.add("General");
+
+            Map<String, Integer> entityCount = new HashMap<>();
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\b[A-Z][a-z]+(?:\\s[A-Z][a-z]+)*\\b");
+
+            for (Video v : all) {
+                String text = (v.getTitle() != null ? v.getTitle() : "") + " " + (v.getDescription() != null ? v.getDescription() : "");
+                java.util.regex.Matcher matcher = pattern.matcher(text);
+                while (matcher.find()) {
+                    String word = matcher.group().trim();
+                    if (word.length() < 3 || word.length() > 40) continue;
+                    if (stopWords.contains(word) || categoryNames.contains(word)) continue;
+                    if (Character.isLowerCase(word.charAt(0))) continue;
+                    entityCount.merge(word, 1, Integer::sum);
+                }
+            }
+
+            entityCount.entrySet().stream()
+                .filter(e -> e.getValue() >= 2)
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(30)
+                .forEach(e -> entities.add(e.getKey()));
+
+            return ResponseEntity.ok(Map.of("categories", allCategories, "entities", new ArrayList<>(entities)));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/all")
     public ResponseEntity<List<Map<String, Object>>> getAllVideos(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String entity,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             UUID currentUserId = null;
@@ -232,6 +290,10 @@ public class VideoController {
             List<Video> filtered = all.stream()
                     .filter(v -> v.getPrivacy() == null || v.getPrivacy().equals("public")
                             || (uid != null && v.getUserId().equals(uid)))
+                    .filter(v -> category == null || category.isEmpty() || "All".equals(category) || category.equals(v.getCategory()))
+                    .filter(v -> entity == null || entity.isEmpty()
+                            || (v.getTitle() != null && v.getTitle().toLowerCase().contains(entity.toLowerCase()))
+                            || (v.getDescription() != null && v.getDescription().toLowerCase().contains(entity.toLowerCase())))
                     .collect(java.util.stream.Collectors.toList());
             List<Map<String, Object>> result = filtered.stream().map(this::enrichVideo).collect(java.util.stream.Collectors.toList());
             return ResponseEntity.ok(result);
