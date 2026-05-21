@@ -35,6 +35,8 @@ public class User {
 
     private String role; // USER, ADMIN
 
+    private boolean isBanned = false;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

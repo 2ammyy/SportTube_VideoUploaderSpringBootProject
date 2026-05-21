@@ -11,4 +11,5 @@ import java.util.UUID;
 public interface WatchHistoryRepository extends JpaRepository<WatchHistory, UUID> {
     List<WatchHistory> findByUserIdOrderByWatchedAtDesc(UUID userId);
     Optional<WatchHistory> findByUserIdAndVideoId(UUID userId, UUID videoId);
+    List<WatchHistory> findByUserId(UUID userId);
 }

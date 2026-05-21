@@ -8,6 +8,8 @@ import java.util.UUID;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, UUID> {
-    List<Comment> findByVideoIdOrderByCreatedAtDesc(UUID videoId);
+    List<Comment> findByVideoIdAndParentIdIsNullOrderByCreatedAtDesc(UUID videoId);
+    List<Comment> findByParentIdOrderByCreatedAtAsc(UUID parentId);
     long countByVideoId(UUID videoId);
+    long countByParentId(UUID parentId);
 }

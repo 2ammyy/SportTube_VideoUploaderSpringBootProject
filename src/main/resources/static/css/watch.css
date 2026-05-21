@@ -466,6 +466,61 @@
     background: rgba(229,9,20,0.1);
 }
 
+.btn-comment-reply {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s;
+}
+
+.btn-comment-reply:hover {
+    color: #4da6ff;
+    background: rgba(77,166,255,0.1);
+}
+
+.reply-toggle {
+    display: inline-block;
+    font-size: 13px;
+    color: #4da6ff;
+    cursor: pointer;
+    margin-top: 6px;
+    font-weight: 600;
+    user-select: none;
+}
+
+.reply-toggle:hover {
+    text-decoration: underline;
+}
+
+.reply-arrow {
+    display: inline-block;
+    font-size: 10px;
+    margin-right: 4px;
+    transition: transform 0.2s;
+}
+
+.comment-replies {
+    margin-top: 8px;
+    padding-left: 0;
+}
+
+.comment-reply-item {
+    border-left: 2px solid #333;
+    padding-left: 12px;
+    margin-top: 8px;
+}
+
+.reply-input-area {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+}
+
 .edit-comment-input {
     box-sizing: border-box;
 }

@@ -31,7 +31,8 @@ async function login() {
             const data = await response.json();
             authToken = data.token;
             localStorage.setItem('authToken', authToken);
-            currentUser = { username, id: data.userId };
+            const payload = JSON.parse(atob(authToken.split('.')[1]));
+            currentUser = { username, id: data.userId, role: payload.role || 'USER' };
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
             updateUserUI();
             closeLoginModal();
@@ -111,6 +112,25 @@ function updateUserUI() {
         });
 
         if (myChannelLink) myChannelLink.style.display = '';
+
+        // Show admin panel link for admins
+        const adminLink = document.getElementById('adminPanelLink');
+        if (adminLink) {
+            try {
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    if (payload.role === 'ADMIN') {
+                        adminLink.style.display = '';
+                    } else {
+                        adminLink.style.display = 'none';
+                    }
+                } else {
+                    adminLink.style.display = 'none';
+                }
+            } catch (e) { adminLink.style.display = 'none'; }
+        }
+
         if (loginSignupLink) loginSignupLink.style.display = 'none';
         if (logoutLink) logoutLink.style.display = '';
     } else {
@@ -350,6 +370,47 @@ async function addComment() {
 }
 
 // ============ Saved / History ============
+
+async function loadRecommendations() {
+    const section = document.getElementById('recommendedSection');
+    const container = document.getElementById('recommendedContainer');
+    if (!section || !container) return;
+    if (!authToken) { section.style.display = 'none'; return; }
+    try {
+        const res = await fetch(`${API_BASE}/videos/recommendations`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+            const videos = await res.json();
+            if (videos && videos.length > 0) {
+                section.style.display = 'block';
+                container.innerHTML = '<div class="scroll-x">' + videos.map(v => `
+                    <div class="video-card" onclick="window.location.href='watch.html?id=${v.id}'">
+                        <div class="video-thumbnail">
+                            <img src="${getThumbnail(v)}" alt="${escapeXml(getDisplayTitle(v))}">
+                            <div class="play-overlay"></div>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-title">${escapeXml(getDisplayTitle(v))}</div>
+                            <div class="channel-row" onclick="event.stopPropagation();window.location.href='profile.html?userId=${v.userId}'">
+                                <div class="channel-avatar" style="background:${v.avatarColor || '#667eea'}">${channelAvatarHtml(v)}</div>
+                                <span class="channel-name">${escapeXml(v.username || 'Unknown')}</span>
+                            </div>
+                            <div class="video-meta">
+                                ${v.category ? '<span>🏷️ ' + escapeXml(v.category) + '</span>' : ''}
+                                <span>📅 ${new Date(v.createdAt).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+            } else {
+                section.style.display = 'none';
+            }
+        } else {
+            section.style.display = 'none';
+        }
+    } catch (e) { section.style.display = 'none'; }
+}
 
 async function loadSaved() {
     const section = document.getElementById('savedSection');
@@ -1054,12 +1115,13 @@ if (!window.location.pathname.includes('search.html')) {
         }
     }
     else updateUserUI();
+    loadRecommendations();
     loadSaved();
     loadHistory();
     loadSavedPlaylistsSection();
     loadPlaylistHistorySection();
     setInterval(loadVideos, 15000);
-    setInterval(() => { if (authToken) { loadSaved(); loadHistory(); loadSavedPlaylistsSection(); loadPlaylistHistorySection(); } }, 30000);
+    setInterval(() => { if (authToken) { loadRecommendations(); loadSaved(); loadHistory(); loadSavedPlaylistsSection(); loadPlaylistHistorySection(); } }, 30000);
 } else {
     if (authToken) updateUserUI();
 }

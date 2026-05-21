@@ -27,6 +27,8 @@ public class Comment {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    private UUID parentId;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

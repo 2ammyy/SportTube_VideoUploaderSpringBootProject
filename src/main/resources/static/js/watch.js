@@ -93,7 +93,9 @@ async function loadVideo() {
         if (isOwner) {
             document.getElementById('subscribeBtn').style.display = 'none';
             document.getElementById('reportBtn').style.display = 'none';
-            document.getElementById('commentInputSection').style.display = 'none';
+            if (authToken) {
+                document.getElementById('commentInputSection').style.display = 'flex';
+            }
             const editBtn = document.createElement('button');
             editBtn.className = 'btn-secondary';
             editBtn.textContent = 'Edit Video';
@@ -553,12 +555,13 @@ document.addEventListener('click', function(e) {
     }
 });
 
-async function addComment() {
+async function addComment(replyToId) {
     const warning = document.getElementById('commentWarning');
     if (warning) warning.style.display = 'none';
     if (!requireAuth()) return;
     if (!currentVideoId) return;
-    const input = document.getElementById('commentInput');
+    const input = replyToId ? document.getElementById('replyInput_' + replyToId) : document.getElementById('commentInput');
+    if (!input) return;
     const content = input.value.trim();
     if (!content) return;
 
@@ -568,17 +571,25 @@ async function addComment() {
     }
 
     try {
+        const body = { content };
+        if (replyToId) body.parentId = replyToId;
         const res = await fetch(`${API_BASE}/videos/${currentVideoId}/comments`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({ content })
+            body: JSON.stringify(body)
         });
         if (res.ok) {
-            input.value = '';
+            if (replyToId) {
+                cancelReply(replyToId);
+                loadReplies(replyToId);
+            } else {
+                input.value = '';
+            }
             loadComments(currentVideoId);
+            updateCommentCount();
             showToast('Comment added', 'success');
         } else {
             let errMsg = 'Failed to add comment';
@@ -603,6 +614,16 @@ async function addComment() {
     }
 }
 
+async function updateCommentCount() {
+    try {
+        const res = await fetch(`${API_BASE}/videos/${currentVideoId}/comments`);
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('commentCount').textContent = `(${data.totalCount || 0})`;
+        }
+    } catch (e) {}
+}
+
 const commentContents = {};
 
 async function loadComments(videoId) {
@@ -610,8 +631,10 @@ async function loadComments(videoId) {
     try {
         const res = await fetch(`${API_BASE}/videos/${videoId}/comments`);
         if (res.ok) {
-            const comments = await res.json();
-            document.getElementById('commentCount').textContent = `(${comments.length})`;
+            const data = await res.json();
+            const comments = data.comments || data;
+            const totalCount = data.totalCount || comments.length;
+            document.getElementById('commentCount').textContent = `(${totalCount})`;
             const list = document.getElementById('commentsList');
             if (comments.length === 0) {
                 list.innerHTML = '<div style="color:#aaa;padding:10px;">No comments yet</div>';
@@ -624,7 +647,12 @@ async function loadComments(videoId) {
                     const avatarHtml = c.avatarPath
                         ? '<img src="' + API_BASE + '/auth/users/' + c.userId + '/avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
                         : (c.username ? c.username.charAt(0).toUpperCase() : 'U');
-                    return '<div class="comment-item">' +
+                    const replyCount = c.replyCount || 0;
+                    const repliesHtml = '<div class="comment-replies" id="replies_' + c.id + '"></div>';
+                    const toggleText = replyCount > 0 ? '<span class="reply-toggle" onclick="toggleReplies(\'' + c.id + '\')" id="replyToggle_' + c.id + '">' +
+                        '<span class="reply-arrow" id="replyArrow_' + c.id + '">&#9654;</span> ' + replyCount + ' ' + (replyCount === 1 ? 'reply' : 'replies') +
+                        '</span>' : '';
+                    return '<div class="comment-item" id="comment_' + c.id + '">' +
                         '<div class="comment-user-avatar" ' + avatarStyle + '>' + avatarHtml + '</div>' +
                         '<div class="comment-content">' +
                             '<div class="comment-user">' + esc(c.username || 'Unknown') + '</div>' +
@@ -632,13 +660,90 @@ async function loadComments(videoId) {
                             '<div class="comment-meta-row">' +
                                 '<span class="comment-date">' + timeAgo(new Date(c.createdAt)) + '</span>' +
                                 (c.updatedAt ? '<span class="comment-edited">(edited)</span>' : '') +
+                                '<button class="btn-comment-reply" onclick="showReplyInput(\'' + c.id + '\',\'' + escAttr(c.username) + '\')">Reply</button>' +
                                 (isOwn ? '<button class="btn-comment-edit" data-cid="' + c.id + '">Edit</button>' : '') +
                                 (isOwn ? '<button class="btn-comment-delete" data-cid="' + c.id + '">Delete</button>' : '') +
                             '</div>' +
+                            '<div class="reply-input-area" id="replyInputArea_' + c.id + '" style="display:none;">' +
+                                '<input type="text" id="replyInput_' + c.id + '" placeholder="Reply to ' + escAttr(c.username) + '..." style="width:100%;padding:8px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff;font-size:13px;">' +
+                                '<div style="margin-top:6px;display:flex;gap:8px;">' +
+                                    '<button class="btn-primary" style="padding:4px 12px;font-size:12px;" onclick="addComment(\'' + c.id + '\')">Reply</button>' +
+                                    '<button class="btn-secondary" style="padding:4px 12px;font-size:12px;" onclick="cancelReply(\'' + c.id + '\')">Cancel</button>' +
+                                '</div>' +
+                                '<div class="mod-warning" id="replyWarning_' + c.id + '" style="display:none;margin-top:4px;">⚠️ This content violates our community guidelines and cannot be posted.</div>' +
+                            '</div>' +
+                            repliesHtml +
+                            toggleText +
                         '</div>' +
                     '</div>';
                 }).join('');
             }
+        }
+    } catch (e) {}
+}
+
+function showReplyInput(commentId, username) {
+    const area = document.getElementById('replyInputArea_' + commentId);
+    if (area) {
+        area.style.display = 'block';
+        const input = document.getElementById('replyInput_' + commentId);
+        if (input) input.focus();
+    }
+}
+
+function cancelReply(commentId) {
+    const area = document.getElementById('replyInputArea_' + commentId);
+    if (area) {
+        area.style.display = 'none';
+        const input = document.getElementById('replyInput_' + commentId);
+        if (input) input.value = '';
+    }
+    const warn = document.getElementById('replyWarning_' + commentId);
+    if (warn) warn.style.display = 'none';
+}
+
+async function toggleReplies(commentId) {
+    const container = document.getElementById('replies_' + commentId);
+    const arrow = document.getElementById('replyArrow_' + commentId);
+    if (!container) return;
+    if (container.innerHTML) {
+        container.innerHTML = '';
+        if (arrow) arrow.innerHTML = '&#9654;';
+        return;
+    }
+    if (arrow) arrow.innerHTML = '&#9660;';
+    await loadReplies(commentId);
+}
+
+async function loadReplies(parentId) {
+    const container = document.getElementById('replies_' + parentId);
+    if (!container) return;
+    try {
+        const res = await fetch(`${API_BASE}/videos/comments/${parentId}/replies`);
+        if (res.ok) {
+            const replies = await res.json();
+            const currentUserId = currentUser && (currentUser.id || currentUser.userId);
+            container.innerHTML = replies.map(c => {
+                commentContents[c.id] = c.content;
+                const isOwn = currentUserId && c.userId === currentUserId;
+                const avatarStyle = c.avatarColor ? 'style="background:' + c.avatarColor + '"' : '';
+                const avatarHtml = c.avatarPath
+                    ? '<img src="' + API_BASE + '/auth/users/' + c.userId + '/avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+                    : (c.username ? c.username.charAt(0).toUpperCase() : 'U');
+                return '<div class="comment-item comment-reply-item">' +
+                    '<div class="comment-user-avatar" ' + avatarStyle + '>' + avatarHtml + '</div>' +
+                    '<div class="comment-content">' +
+                        '<div class="comment-user">' + esc(c.username || 'Unknown') + '</div>' +
+                        '<div class="comment-text" id="commentText_' + c.id + '">' + renderMentions(c.content) + '</div>' +
+                        '<div class="comment-meta-row">' +
+                            '<span class="comment-date">' + timeAgo(new Date(c.createdAt)) + '</span>' +
+                            (c.updatedAt ? '<span class="comment-edited">(edited)</span>' : '') +
+                            (isOwn ? '<button class="btn-comment-edit" data-cid="' + c.id + '">Edit</button>' : '') +
+                            (isOwn ? '<button class="btn-comment-delete" data-cid="' + c.id + '">Delete</button>' : '') +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
         }
     } catch (e) {}
 }
@@ -970,7 +1075,7 @@ setupMentionAutocomplete();
 
 // Comment button click handler
 const commentBtn = document.getElementById('submitCommentBtn');
-if (commentBtn) commentBtn.addEventListener('click', addComment);
+if (commentBtn) commentBtn.addEventListener('click', function() { addComment(); });
 
 // Event delegation for edit/delete comment buttons
 const commentsList = document.getElementById('commentsList');

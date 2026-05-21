@@ -8,5 +8,7 @@ import java.util.UUID;
 public interface ReportRepository extends JpaRepository<Report, UUID> {
     List<Report> findByVideoId(UUID videoId);
     List<Report> findByIsResolvedFalse();
+    List<Report> findAllByOrderByCreatedAtDesc();
     boolean existsByVideoIdAndReporterId(UUID videoId, UUID reporterId);
+    long countByIsResolvedFalse();
 }

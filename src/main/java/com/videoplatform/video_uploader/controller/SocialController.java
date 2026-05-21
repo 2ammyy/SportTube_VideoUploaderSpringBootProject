@@ -3,10 +3,13 @@ package com.videoplatform.video_uploader.controller;
 import com.videoplatform.video_uploader.model.Notification;
 import com.videoplatform.video_uploader.model.Report;
 import com.videoplatform.video_uploader.model.Subscription;
+import com.videoplatform.video_uploader.model.User;
 import com.videoplatform.video_uploader.repository.NotificationRepository;
 import com.videoplatform.video_uploader.repository.ReportRepository;
 import com.videoplatform.video_uploader.repository.SubscriptionRepository;
+import com.videoplatform.video_uploader.repository.UserRepository;
 import com.videoplatform.video_uploader.service.AuthService;
+import com.videoplatform.video_uploader.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +29,9 @@ public class SocialController {
     private final SubscriptionRepository subscriptionRepository;
     private final NotificationRepository notificationRepository;
     private final ReportRepository reportRepository;
+    private final UserRepository userRepository;
     private final AuthService authService;
+    private final NotificationService notificationService;
 
     // ============ SUBSCRIBE ============
 
@@ -50,11 +55,10 @@ public class SocialController {
                 subscriptionRepository.save(sub);
 
                 // Create notification for channel owner
-                Notification notif = new Notification();
-                notif.setUserId(channelId);
-                notif.setType("SUBSCRIBE");
-                notif.setMessage("New subscriber!");
-                notificationRepository.save(notif);
+                User subscriber = userRepository.findById(userId).orElse(null);
+                String subName = subscriber != null ? subscriber.getUsername() : "Someone";
+                notificationService.createNotification(channelId, userId, "SUBSCRIBE", null,
+                        subName + " subscribed to you");
 
                 log.info("User {} subscribed to channel {}", userId, channelId);
                 return ResponseEntity.ok(Map.of("subscribed", true));
@@ -156,25 +160,4 @@ public class SocialController {
         }
     }
 
-    @GetMapping("/admin/reports")
-    public ResponseEntity<?> getUnresolvedReports(@RequestHeader("Authorization") String token) {
-        try {
-            List<Report> reports = reportRepository.findByIsResolvedFalse();
-            return ResponseEntity.ok(reports);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @PostMapping("/admin/reports/{id}/resolve")
-    public ResponseEntity<?> resolveReport(@PathVariable UUID id, @RequestHeader("Authorization") String token) {
-        try {
-            Report report = reportRepository.findById(id).orElseThrow();
-            report.setResolved(true);
-            reportRepository.save(report);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
 }

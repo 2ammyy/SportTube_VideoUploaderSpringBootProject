@@ -4,6 +4,7 @@ import com.videoplatform.video_uploader.model.*;
 import com.videoplatform.video_uploader.repository.*;
 import com.videoplatform.video_uploader.service.AuthService;
 import com.videoplatform.video_uploader.service.ModerationService;
+import com.videoplatform.video_uploader.service.NotificationService;
 import com.videoplatform.video_uploader.service.StorageService;
 import com.videoplatform.video_uploader.service.VideoContentClassifier;
 import com.videoplatform.video_uploader.service.VideoProcessingService;
@@ -45,6 +46,7 @@ public class VideoController {
     private final UserRepository userRepository;
     private final ModerationService moderationService;
     private final VideoContentClassifier videoContentClassifier;
+    private final NotificationService notificationService;
 
 
     // Inner class for upload response
@@ -110,7 +112,12 @@ public class VideoController {
             // 3. Create database record
             Video video = videoService.create(userId, file.getOriginalFilename(), tempPath, title, description, privacy);
 
-            // 3. Send Kafka event for AI processing pipeline
+            // Notify @mentioned users in description
+            if (description != null && !description.isEmpty()) {
+                notifyMentions(description, userId, video.getId(), null);
+            }
+
+            // 4. Send Kafka event for AI processing pipeline
             try {
                 com.videoplatform.video_uploader.events.VideoUploadedEvent event = new com.videoplatform.video_uploader.events.VideoUploadedEvent(
                         video.getId(), tempPath, file.getSize(), file.getContentType());
@@ -201,6 +208,7 @@ public class VideoController {
         map.put("status", v.getStatus() != null ? v.getStatus().name() : null);
         map.put("createdAt", v.getCreatedAt());
         map.put("aiLabel", v.getAiLabel());
+        map.put("category", v.getCategory());
         map.put("privacy", v.getPrivacy());
         User uploader = userRepository.findById(v.getUserId()).orElse(null);
         map.put("username", uploader != null ? uploader.getUsername() : "Unknown");
@@ -232,6 +240,66 @@ public class VideoController {
         }
     }
 
+    // ============ RECOMMENDATIONS ============
+
+    @GetMapping("/recommendations")
+    public ResponseEntity<?> getRecommendations(@RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            List<WatchHistory> history = watchHistoryRepository.findByUserId(userId);
+            Set<UUID> watchedIds = history.stream().map(WatchHistory::getVideoId).collect(java.util.stream.Collectors.toSet());
+
+            if (history.isEmpty()) {
+                List<Video> recent = videoRepository.findAllByOrderByCreatedAtDesc();
+                if (recent.size() > 20) recent = recent.subList(0, 20);
+                return ResponseEntity.ok(recent.stream().map(this::enrichVideo).collect(java.util.stream.Collectors.toList()));
+            }
+
+            List<Video> watchedVideos = videoRepository.findAllById(watchedIds);
+            Map<String, Integer> categoryCount = new HashMap<>();
+            for (Video v : watchedVideos) {
+                if (v.getCategory() != null) {
+                    categoryCount.merge(v.getCategory(), 1, Integer::sum);
+                }
+            }
+            List<String> sortedCategories = categoryCount.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                    .map(Map.Entry::getKey)
+                    .collect(java.util.stream.Collectors.toList());
+
+            if (sortedCategories.isEmpty()) {
+                List<Video> fallback = videoRepository.findAllByOrderByCreatedAtDesc();
+                return ResponseEntity.ok(fallback.stream()
+                        .filter(v -> !watchedIds.contains(v.getId()))
+                        .limit(20)
+                        .map(this::enrichVideo)
+                        .collect(java.util.stream.Collectors.toList()));
+            }
+
+            List<Video> recommendations = videoRepository
+                    .findByCategoryInAndIdNotIn(sortedCategories, new ArrayList<>(watchedIds));
+            recommendations.sort((a, b) -> {
+                int aScore = categoryCount.getOrDefault(a.getCategory(), 0);
+                int bScore = categoryCount.getOrDefault(b.getCategory(), 0);
+                if (bScore != aScore) return bScore - aScore;
+                return b.getCreatedAt().compareTo(a.getCreatedAt());
+            });
+            if (recommendations.size() > 30) recommendations = recommendations.subList(0, 30);
+
+            if (recommendations.size() < 10) {
+                Set<UUID> already = recommendations.stream().map(Video::getId).collect(java.util.stream.Collectors.toSet());
+                already.addAll(watchedIds);
+                List<Video> extra = videoRepository.findByCategoryIsNotNullAndIdNotIn(new ArrayList<>(already));
+                extra.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
+                recommendations.addAll(extra.subList(0, Math.min(extra.size(), 20 - recommendations.size())));
+            }
+
+            return ResponseEntity.ok(recommendations.stream().map(this::enrichVideo).collect(java.util.stream.Collectors.toList()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // ============ LIKES ENDPOINTS ============
 
     @PostMapping("/{id}/like")
@@ -240,6 +308,7 @@ public class VideoController {
             UUID userId = authService.validateToken(token.replace("Bearer ", ""));
             Optional<Like> existingLike = likeRepository.findByVideoIdAndUserId(id, userId);
 
+            boolean wasDislike = existingLike.isPresent() && !existingLike.get().isLike();
             if (existingLike.isPresent()) {
                 Like like = existingLike.get();
                 like.setLike(true);
@@ -250,6 +319,16 @@ public class VideoController {
                 like.setUserId(userId);
                 like.setLike(true);
                 likeRepository.save(like);
+            }
+
+            // Notify video owner on like (not on toggle from dislike)
+            if (!wasDislike) {
+                Video video = videoRepository.findById(id).orElse(null);
+                User liker = userRepository.findById(userId).orElse(null);
+                if (video != null && !video.getUserId().equals(userId)) {
+                    notificationService.createNotification(video.getUserId(), userId, "LIKE", id,
+                            (liker != null ? liker.getUsername() : "Someone") + " liked your video");
+                }
             }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -263,6 +342,7 @@ public class VideoController {
             UUID userId = authService.validateToken(token.replace("Bearer ", ""));
             Optional<Like> existingLike = likeRepository.findByVideoIdAndUserId(id, userId);
 
+            boolean wasLike = existingLike.isPresent() && existingLike.get().isLike();
             if (existingLike.isPresent()) {
                 Like like = existingLike.get();
                 like.setLike(false);
@@ -273,6 +353,16 @@ public class VideoController {
                 like.setUserId(userId);
                 like.setLike(false);
                 likeRepository.save(like);
+            }
+
+            // Notify video owner on dislike (not on toggle from like)
+            if (!wasLike) {
+                Video video = videoRepository.findById(id).orElse(null);
+                User disliker = userRepository.findById(userId).orElse(null);
+                if (video != null && !video.getUserId().equals(userId)) {
+                    notificationService.createNotification(video.getUserId(), userId, "DISLIKE", id,
+                            (disliker != null ? disliker.getUsername() : "Someone") + " disliked your video");
+                }
             }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -310,12 +400,54 @@ public class VideoController {
             if (moderationService.isFlagged(content)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "This comment violates community guidelines"));
             }
+            String parentIdStr = request.get("parentId");
             Comment comment = new Comment();
             comment.setVideoId(id);
             comment.setUserId(userId);
             comment.setContent(content);
+            if (parentIdStr != null && !parentIdStr.isEmpty()) {
+                UUID parentId = UUID.fromString(parentIdStr);
+                if (commentRepository.findById(parentId).isEmpty()) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Parent comment not found"));
+                }
+                comment.setParentId(parentId);
+            }
             commentRepository.save(comment);
-            return ResponseEntity.ok(comment);
+
+            // Notify video owner
+            Video video = videoRepository.findById(id).orElse(null);
+            User commenter = userRepository.findById(userId).orElse(null);
+            String commenterName = commenter != null ? commenter.getUsername() : "Someone";
+            if (video != null && !video.getUserId().equals(userId)) {
+                notificationService.createNotification(video.getUserId(), userId, "COMMENT", id,
+                        commenterName + " commented: " + (content.length() > 80 ? content.substring(0, 80) + "..." : content));
+            }
+
+            // Notify @mentioned users
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("@(\\w+)").matcher(content);
+            while (matcher.find()) {
+                String mentionedName = matcher.group(1);
+                userRepository.findByUsername(mentionedName).ifPresent(mentioned -> {
+                    if (!mentioned.getId().equals(userId) && (video == null || !mentioned.getId().equals(video.getUserId()))) {
+                        notificationService.createNotification(mentioned.getId(), userId, "MENTION", id,
+                                commenterName + " mentioned you in a comment");
+                    }
+                });
+            }
+
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", comment.getId());
+            m.put("videoId", comment.getVideoId());
+            m.put("userId", comment.getUserId());
+            m.put("content", comment.getContent());
+            m.put("parentId", comment.getParentId());
+            m.put("createdAt", comment.getCreatedAt());
+            m.put("updatedAt", comment.getUpdatedAt());
+            User u = userRepository.findById(comment.getUserId()).orElse(null);
+            m.put("username", u != null ? u.getUsername() : "Unknown");
+            m.put("avatarPath", u != null ? u.getAvatarPath() : null);
+            m.put("avatarColor", u != null ? u.getAvatarColor() : "#667eea");
+            return ResponseEntity.ok(m);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -323,13 +455,36 @@ public class VideoController {
 
     @GetMapping("/{id}/comments")
     public ResponseEntity<?> getComments(@PathVariable UUID id) {
-        List<Comment> comments = commentRepository.findByVideoIdOrderByCreatedAtDesc(id);
+        List<Comment> comments = commentRepository.findByVideoIdAndParentIdIsNullOrderByCreatedAtDesc(id);
+        long totalCount = commentRepository.countByVideoId(id);
         List<Map<String, Object>> enriched = comments.stream().map(c -> {
             Map<String, Object> m = new HashMap<>();
             m.put("id", c.getId());
             m.put("videoId", c.getVideoId());
             m.put("userId", c.getUserId());
             m.put("content", c.getContent());
+            m.put("createdAt", c.getCreatedAt());
+            m.put("updatedAt", c.getUpdatedAt());
+            m.put("replyCount", commentRepository.countByParentId(c.getId()));
+            User u = userRepository.findById(c.getUserId()).orElse(null);
+            m.put("username", u != null ? u.getUsername() : "Unknown");
+            m.put("avatarPath", u != null ? u.getAvatarPath() : null);
+            m.put("avatarColor", u != null ? u.getAvatarColor() : "#667eea");
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(Map.of("comments", enriched, "totalCount", totalCount));
+    }
+
+    @GetMapping("/comments/{commentId}/replies")
+    public ResponseEntity<?> getReplies(@PathVariable UUID commentId) {
+        List<Comment> replies = commentRepository.findByParentIdOrderByCreatedAtAsc(commentId);
+        List<Map<String, Object>> enriched = replies.stream().map(c -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", c.getId());
+            m.put("videoId", c.getVideoId());
+            m.put("userId", c.getUserId());
+            m.put("content", c.getContent());
+            m.put("parentId", c.getParentId());
             m.put("createdAt", c.getCreatedAt());
             m.put("updatedAt", c.getUpdatedAt());
             User u = userRepository.findById(c.getUserId()).orElse(null);
@@ -378,6 +533,8 @@ public class VideoController {
             if (!comment.getUserId().equals(userId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "You can only delete your own comments"));
             }
+            List<Comment> replies = commentRepository.findByParentIdOrderByCreatedAtAsc(commentId);
+            commentRepository.deleteAll(replies);
             commentRepository.delete(comment);
             return ResponseEntity.ok(Map.of("message", "Comment deleted"));
         } catch (Exception e) {
@@ -757,6 +914,19 @@ public class VideoController {
             ));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+
+    private void notifyMentions(String text, UUID triggeredByUserId, UUID videoId, UUID excludeUserId) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("@(\\w+)").matcher(text);
+        while (matcher.find()) {
+            String mentionedName = matcher.group(1);
+            userRepository.findByUsername(mentionedName).ifPresent(mentioned -> {
+                if (excludeUserId == null || !mentioned.getId().equals(excludeUserId)) {
+                    notificationService.createNotification(mentioned.getId(), triggeredByUserId, "MENTION", videoId,
+                            "You were mentioned in a video description");
+                }
+            });
         }
     }
 }

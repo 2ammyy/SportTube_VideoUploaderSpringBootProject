@@ -17,6 +17,7 @@ import java.util.UUID;
 public class VideoService {
 
     private final VideoRepository videoRepository;
+    private final SportCategorizer sportCategorizer;
 
     @Transactional
     public Video create(UUID userId, String originalFilename, String tempPath, String title, String description, String privacy) {
@@ -32,6 +33,7 @@ public class VideoService {
         if (privacy != null && !privacy.isBlank()) {
             video.setPrivacy(privacy);
         }
+        video.setCategory(sportCategorizer.categorize(title, description));
         return videoRepository.save(video);
     }
 
@@ -90,6 +92,7 @@ public class VideoService {
         if (title != null) video.setTitle(title);
         if (description != null) video.setDescription(description);
         if (privacy != null) video.setPrivacy(privacy);
+        video.setCategory(sportCategorizer.categorize(video.getTitle(), video.getDescription()));
         return videoRepository.save(video);
     }
 }

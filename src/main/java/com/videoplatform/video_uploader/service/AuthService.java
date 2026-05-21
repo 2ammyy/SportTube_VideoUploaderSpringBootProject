@@ -86,6 +86,20 @@ public class AuthService {
         }
     }
 
+    public UUID validateTokenAndGetRole(String token, String[] roleOut) {
+        try {
+            var claims = Jwts.parserBuilder()
+                    .setSigningKey(SECRET_KEY)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            roleOut[0] = (String) claims.get("role");
+            return UUID.fromString(claims.getSubject());
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid token");
+        }
+    }
+
     public void changePassword(UUID userId, String oldPassword, String newPassword) {
         User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {

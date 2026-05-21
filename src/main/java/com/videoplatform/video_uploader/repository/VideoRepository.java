@@ -10,4 +10,9 @@ public interface VideoRepository extends JpaRepository<Video, UUID> {
     List<Video> findByStatus(VideoStatus status);
     List<Video> findByUserId(UUID userId);
     long countByStatus(VideoStatus status);
+    List<Video> findAllByOrderByCreatedAtDesc();
+    long count();
+    List<Video> findByCategoryInAndIdNotInAndStatus(List<String> categories, List<UUID> excludeIds, VideoStatus status);
+    List<Video> findByCategoryInAndIdNotIn(List<String> categories, List<UUID> excludeIds);
+    List<Video> findByCategoryIsNotNullAndIdNotIn(List<UUID> excludeIds);
 }

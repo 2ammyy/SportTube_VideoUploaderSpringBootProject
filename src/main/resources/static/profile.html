@@ -31,6 +31,7 @@
                 </div>
             </div>
             <a id="myChannelLink" onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
+            <a id="adminPanelLink" onclick="window.location.href='admin.html'" style="display:none;">🛡️ Admin Panel</a>
             <a id="loginSignupLink" onclick="showLogin()">🔐 Login / Signup</a>
             <a id="logoutLink" onclick="logout()" style="display:none;">🚪 Logout</a>
         </div>
@@ -98,7 +99,7 @@
     </div>
 </div>
 
-<script src="js/app.js?v=4"></script>
+<script src="js/app.js?v=6"></script>
 <script>
 const COLORS = ['#667eea','#e50914','#4caf50','#2196f3','#ff9800','#9c27b0','#f44336','#00bcd4','#e91e63','#3f51b5','#009688','#ff5722'];
 

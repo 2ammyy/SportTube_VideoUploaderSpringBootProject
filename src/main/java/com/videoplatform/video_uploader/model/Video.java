@@ -45,6 +45,9 @@ public class Video {
     @Column(length = 100)
     private String aiLabel;
 
+    @Column(length = 50)
+    private String category;
+
     private Double aiConfidence;
 
     @Column(columnDefinition = "TEXT")
