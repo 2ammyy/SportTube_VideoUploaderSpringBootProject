@@ -55,6 +55,10 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
+        if (user.isBanned()) {
+            throw new RuntimeException("Your account has been banned");
+        }
+
         return generateToken(user);
     }
 

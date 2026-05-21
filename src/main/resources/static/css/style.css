@@ -1669,3 +1669,74 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Admin sortable columns */
+.admin-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.admin-table th.sortable:hover {
+    color: #00c853;
+}
+
+/* Admin filter bar */
+.admin-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.admin-filter-input {
+    flex: 1;
+    max-width: 360px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #2a3050;
+    background: #141a2e;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.admin-filter-input:focus {
+    border-color: #00c853;
+}
+.admin-filter-input::placeholder {
+    color: #555;
+}
+.admin-filter-count {
+    font-size: 12px;
+    color: #888;
+    white-space: nowrap;
+}
+
+/* Admin charts */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+}
+.chart-card {
+    background: #141a2e;
+    border: 1px solid #2a2a3e;
+    border-radius: 10px;
+    padding: 20px;
+    height: 280px;
+    position: relative;
+}
+.chart-card.chart-full {
+    grid-column: 1 / -1;
+    height: 320px;
+}
+.chart-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+    margin: 0 0 16px 0;
+}
+.chart-card canvas {
+    width: 100% !important;
+    height: calc(100% - 32px) !important;
+}
