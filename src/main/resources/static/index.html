@@ -43,12 +43,13 @@
                 </div>
             </div>
             <a id="myChannelLink" onclick="if(currentUser){window.location.href='profile.html?userId='+currentUser.id}else{showLogin()}">👤 My Channel</a>
-            <a onclick="window.location.href='library.html'" style="display:none;" id="libraryLink">📚 Library</a>
+            <a onclick="window.location.href='index.html'" style="display:none;" id="libraryLink">📚 Library</a>
             <a id="adminPanelLink" onclick="window.location.href='admin.html'" style="display:none;">🛡️ Admin Panel</a>
             <a id="loginSignupLink" onclick="showLogin()">🔐 Login / Signup</a>
             <a id="logoutLink" onclick="logout()" style="display:none;">🚪 Logout</a>
         </div>
     </div>
+    <div class="navbar-filters" id="filterChips"></div>
 </nav>
 
 <!-- Hero Section -->
@@ -61,26 +62,60 @@
     </div>
 </div>
 -->
-<div class="container">
-    <div class="section" id="recommendedSection" style="display:none;">
-        <div class="section-header">
-            <h2 class="section-title">Recommended For You</h2>
+<div class="lib-layout">
+    <aside class="lib-sidebar">
+        <div class="lib-sidebar-section">
+            <div class="lib-nav-item active" data-tab="home" onclick="switchLibTab('home', this)">
+                <span class="lib-nav-icon">🏠</span> Home
+            </div>
+            <div class="lib-nav-item" data-tab="saved" onclick="switchLibTab('saved', this)">
+                <span class="lib-nav-icon">📌</span> Saved Videos
+            </div>
+            <div class="lib-nav-item" data-tab="history" onclick="switchLibTab('history', this)">
+                <span class="lib-nav-icon">⏱️</span> Watch History
+            </div>
+            <div class="lib-nav-item" data-tab="playlists" onclick="switchLibTab('playlists', this)">
+                <span class="lib-nav-icon">📋</span> Playlists
+            </div>
         </div>
-        <div id="recommendedContainer">
-            <div class="loading">Loading recommendations...</div>
+        <div class="lib-sidebar-section">
+            <div class="lib-sidebar-label">Subscriptions</div>
+            <div id="libSubscriptionsList">
+                <div class="loading" style="padding:8px 16px;font-size:12px;">Loading...</div>
+            </div>
         </div>
-    </div>
+    </aside>
+    <main class="lib-content">
+        <div class="lib-tab-content active" id="libTabHome">
+            <div class="section" id="recommendedSection" style="display:none;">
+                <div class="section-header">
+                    <h2 class="section-title">Recommended For You</h2>
+                </div>
+                <div id="recommendedContainer">
+                    <div class="loading">Loading recommendations...</div>
+                </div>
+            </div>
 
-    <div class="section">
-        <div class="section-header">
-            <h2 class="section-title" id="sectionTitle">All Videos</h2>
-            <a href="#" class="section-link" onclick="refreshVideos()">↻ Refresh</a>
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title" id="sectionTitle">All Videos</h2>
+                    <a href="#" class="section-link" onclick="refreshVideos()">↻ Refresh</a>
+                </div>
+                <div id="videosContainer">
+                    <div class="loading">Loading videos...</div>
+                </div>
+            </div>
         </div>
-        <div id="filterChips" class="filter-chips"></div>
-        <div id="videosContainer">
-            <div class="loading">Loading videos...</div>
+        <div class="lib-tab-content" id="libTabSaved">
+            <div id="libSavedContainer"><div class="loading">Loading saved videos...</div></div>
         </div>
-    </div>
+        <div class="lib-tab-content" id="libTabHistory">
+            <div id="libHistoryContainer"><div class="loading">Loading watch history...</div></div>
+        </div>
+        <div class="lib-tab-content" id="libTabPlaylists">
+            <div id="libPlaylistsContainer"><div class="loading">Loading playlists...</div></div>
+        </div>
+    </main>
 </div>
 
 <!-- Video Player Modal -->
@@ -202,6 +237,6 @@
     </div>
 </div>
 
-<script src="js/app.js?v=7"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

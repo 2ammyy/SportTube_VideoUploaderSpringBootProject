@@ -68,6 +68,27 @@ public class SocialController {
         }
     }
 
+    @GetMapping("/channels/subscriptions")
+    public ResponseEntity<?> getMySubscriptions(@RequestHeader("Authorization") String token) {
+        try {
+            UUID userId = authService.validateToken(token.replace("Bearer ", ""));
+            List<UUID> channelIds = subscriptionRepository.findSubscribedChannelIds(userId);
+            List<Map<String, Object>> channels = channelIds.stream().map(cid -> {
+                User u = userRepository.findById(cid).orElse(null);
+                if (u == null) return null;
+                return Map.<String, Object>of(
+                    "id", u.getId(),
+                    "username", u.getUsername(),
+                    "avatarColor", u.getAvatarColor() != null ? u.getAvatarColor() : "#667eea",
+                    "avatarPath", u.getAvatarPath() != null ? u.getAvatarPath() : ""
+                );
+            }).filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(channels);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/channels/{channelId}/subscribers")
     public ResponseEntity<?> getSubscriberCount(@PathVariable UUID channelId) {
         long count = subscriptionRepository.countByChannelId(channelId);

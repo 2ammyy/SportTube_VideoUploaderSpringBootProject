@@ -41,6 +41,7 @@ async function login() {
             showToast('Login successful!', 'success');
             loadSaved();
             loadHistory();
+            loadLibSubscriptions();
         } else {
             const error = await response.text();
             showToast('Login failed: ' + error, 'error');
@@ -1182,7 +1183,10 @@ if (!window.location.pathname.includes('search.html')) {
             showLogin();
         }
     }
-    else updateUserUI();
+    else {
+        updateUserUI();
+        loadLibSubscriptions();
+    }
     loadRecommendations();
     setInterval(loadVideos, 15000);
     setInterval(() => { if (authToken) { loadRecommendations(); } }, 30000);
@@ -1677,6 +1681,166 @@ async function loadPlaylistHistorySection() {
     } else {
         section.style.display = 'none';
     }
+}
+
+// ============ Sidebar Tab Functions ============
+
+var _currentLibTab = 'home';
+
+function switchLibTab(tab, el) {
+    if (!el) el = document.querySelector('.lib-nav-item[data-tab="' + tab + '"]');
+    document.querySelectorAll('.lib-nav-item').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.lib-tab-content').forEach(function(t) { t.classList.remove('active'); });
+    if (el) el.classList.add('active');
+    document.getElementById('libTab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+    _currentLibTab = tab;
+
+    if (tab === 'saved') loadLibSaved();
+    else if (tab === 'history') loadLibHistory();
+    else if (tab === 'playlists') loadLibPlaylists();
+    else if (tab === 'home') { loadVideos(); loadFilters(); }
+}
+
+async function loadLibSubscriptions() {
+    var container = document.getElementById('libSubscriptionsList');
+    if (!container) return;
+    if (!authToken) { container.innerHTML = '<div class="lib-sub-empty">Login to see subscriptions</div>'; return; }
+    try {
+        var res = await fetch(API_BASE + '/channels/subscriptions', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            var channels = await res.json();
+            if (!channels || channels.length === 0) {
+                container.innerHTML = '<div class="lib-sub-empty">No subscriptions yet</div>';
+            } else {
+                container.innerHTML = channels.map(function(c) {
+                    var avatarHtml = c.avatarPath
+                        ? '<img src="' + API_BASE + '/auth/users/' + c.id + '/avatar" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">'
+                        : (c.username ? c.username.charAt(0).toUpperCase() : '?');
+                    return '<div class="lib-sub-item" onclick="window.location.href=\'profile.html?userId=' + c.id + '\'">' +
+                        '<div class="lib-sub-avatar" style="background:' + c.avatarColor + '">' + avatarHtml + '</div>' +
+                        '<span class="lib-sub-name">' + escapeXml(c.username) + '</span>' +
+                    '</div>';
+                }).join('');
+            }
+        }
+    } catch (e) {}
+}
+
+async function loadLibSaved() {
+    if (!authToken) return;
+    var container = document.getElementById('libSavedContainer');
+    if (!container) return;
+    try {
+        var res = await fetch(API_BASE + '/videos/saved', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            var saved = await res.json();
+            if (saved.length === 0) {
+                container.innerHTML = '<div class="lib-empty">No saved videos yet</div>';
+            } else {
+                container.innerHTML = '<div class="videos-grid">' + saved.map(function(v) { return renderLibVideoCard(v, 'Saved'); }).join('') + '</div>';
+                addCardListeners(container);
+            }
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="lib-empty">Error loading saved videos</div>';
+    }
+}
+
+async function loadLibHistory() {
+    if (!authToken) return;
+    var container = document.getElementById('libHistoryContainer');
+    if (!container) return;
+    try {
+        var res = await fetch(API_BASE + '/videos/history', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            var history = await res.json();
+            if (history.length === 0) {
+                container.innerHTML = '<div class="lib-empty">No watch history yet</div>';
+            } else {
+                container.innerHTML = '<div class="videos-grid">' + history.map(function(v) { return renderLibVideoCard(v, 'Watched'); }).join('') + '</div>';
+                addCardListeners(container);
+            }
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="lib-empty">Error loading history</div>';
+    }
+}
+
+async function loadLibPlaylists() {
+    if (!authToken) return;
+    var container = document.getElementById('libPlaylistsContainer');
+    if (!container) return;
+    try {
+        var res = await fetch(API_BASE + '/playlists/saved', {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            var playlists = await res.json();
+            if (playlists.length === 0) {
+                container.innerHTML = '<div class="lib-empty">No saved playlists yet</div>';
+            } else {
+                container.innerHTML = '<div class="playlist-grid">' + playlists.map(function(p) {
+                    var vidCount = p.videoCount || 0;
+                    var thumbs = p.thumbnails && p.thumbnails.length > 0 ? p.thumbnails : null;
+                    return '<div class="playlist-card" onclick="window.location.href=\'playlist.html?id=' + p.id + '\'">' +
+                        '<div class="pl-thumbnails">' +
+                            (thumbs ? thumbs.map(function(v) { return '<img src="' + API_BASE + '/videos/' + v + '/thumbnail" alt="">'; }).join('') : '<div class="pl-thumb-placeholder">🎬</div>') +
+                        '</div>' +
+                        '<div class="pl-info">' +
+                            '<div class="pl-name">' + escapeXml(p.name) + '</div>' +
+                            '<div class="pl-meta">' + vidCount + ' videos</div>' +
+                        '</div>' +
+                    '</div>';
+                }).join('') + '</div>';
+            }
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="lib-empty">Error loading playlists</div>';
+    }
+}
+
+function renderLibVideoCard(v, label) {
+    var vidId = v.videoId;
+    var title = v.videoTitle || 'Video';
+    var thumb = v.thumbnailPath ? API_BASE + '/videos/' + vidId + '/thumbnail' : '';
+    var avatarColor = v.avatarColor || '#667eea';
+    var avatarHtml = v.avatarPath
+        ? '<img src="' + API_BASE + '/auth/users/' + v.uploaderUserId + '/avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+        : (v.username ? v.username.charAt(0).toUpperCase() : 'U');
+    var channelName = v.username || 'Unknown';
+
+    return '<div class="video-card" onclick="window.location.href=\'watch.html?id=' + vidId + '\'">' +
+        '<div class="video-thumbnail">' +
+            '<img src="' + (thumb || 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><rect fill="#141a2e" width="320" height="180"/><text x="160" y="90" font-family="Arial" font-size="14" fill="#888" text-anchor="middle" dominant-baseline="middle">No Thumbnail</text></svg>')) + '" alt="' + escapeXml(title) + '">' +
+            '<div class="play-overlay"></div>' +
+        '</div>' +
+        '<div class="video-info">' +
+            '<div class="video-title">' + escapeXml(title) + '</div>' +
+            '<div class="channel-row" onclick="event.stopPropagation();window.location.href=\'profile.html?userId=' + v.uploaderUserId + '\'">' +
+                '<div class="channel-avatar" style="background:' + avatarColor + '">' + avatarHtml + '</div>' +
+                '<span class="channel-name">' + escapeXml(channelName) + '</span>' +
+            '</div>' +
+            '<div class="video-meta"><span>' + label + '</span></div>' +
+        '</div>' +
+    '</div>';
+}
+
+function addCardListeners(container) {
+    setTimeout(function() {
+        container.querySelectorAll('.video-card').forEach(function(card) {
+            card.addEventListener('click', function(e) {
+                if (e.target.closest('.channel-row')) return;
+                var href = this.getAttribute('onclick');
+                if (href) window.location.href = href.match(/'(.*?)'/)[1];
+            });
+        });
+    }, 0);
 }
 
 // Init mention autocomplete on description fields after DOM ready
