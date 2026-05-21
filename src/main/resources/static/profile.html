@@ -145,6 +145,30 @@ async function loadProfile() {
 
         document.getElementById('profileStats').textContent = profileVideos.length + ' videos';
 
+        const actionsDiv = document.getElementById('profileActions');
+        if (isOwnProfile) {
+            actionsDiv.innerHTML = `
+                <button class="btn-edit-profile" onclick="showAccountSettings()">Account Settings</button>
+            `;
+        } else if (authToken) {
+            actionsDiv.innerHTML = `
+                <button class="subscribe-btn" id="profileSubscribeBtn" onclick="profileSubscribe()">Subscribe</button>
+            `;
+            // Check subscription status
+            try {
+                const subRes = await fetch(API_BASE + '/channels/' + profileUserId + '/is-subscribed', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                if (subRes.ok) {
+                    const subData = await subRes.json();
+                    if (subData.subscribed) {
+                        var btn = document.getElementById('profileSubscribeBtn');
+                        if (btn) { btn.textContent = 'Subscribed'; btn.classList.add('subscribed'); }
+                    }
+                }
+            } catch (e) {}
+        }
+
         // Fetch subscriber count
         try {
             const subRes = await fetch(`${API_BASE}/channels/${profileUserId}/subscribers`);
@@ -154,13 +178,6 @@ async function loadProfile() {
                 document.getElementById('profileStats').textContent = profileVideos.length + ' videos · ' + count + ' subscriber' + (count !== 1 ? 's' : '');
             }
         } catch (e) {}
-
-        const actionsDiv = document.getElementById('profileActions');
-        if (isOwnProfile) {
-            actionsDiv.innerHTML = `
-                <button class="btn-edit-profile" onclick="showAccountSettings()">Account Settings</button>
-            `;
-        }
     } catch (e) {
         document.getElementById('profileUsername').textContent = 'User not found';
     }
@@ -476,6 +493,40 @@ async function deleteVideo(videoId) {
         }
     } catch (e) {
         showToast('Delete failed', 'error');
+    }
+}
+
+async function profileSubscribe() {
+    if (!authToken) { showLogin(); return; }
+    try {
+        const res = await fetch(API_BASE + '/channels/' + profileUserId + '/subscribe', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            var btn = document.getElementById('profileSubscribeBtn');
+            if (data.subscribed) {
+                btn.textContent = 'Subscribed';
+                btn.classList.add('subscribed');
+                showToast('Subscribed!', 'success');
+            } else {
+                btn.textContent = 'Subscribe';
+                btn.classList.remove('subscribed');
+                showToast('Unsubscribed', 'success');
+            }
+            // Update subscriber count
+            try {
+                var countRes = await fetch(API_BASE + '/channels/' + profileUserId + '/subscribers');
+                if (countRes.ok) {
+                    var countData = await countRes.json();
+                    var count = countData.count || 0;
+                    document.getElementById('profileStats').textContent = profileVideos.length + ' videos · ' + count + ' subscriber' + (count !== 1 ? 's' : '');
+                }
+            } catch (e) {}
+        }
+    } catch (e) {
+        showToast('Error', 'error');
     }
 }
 
