@@ -482,6 +482,9 @@ async function uploadFile() {
             showToast('Uploaded! Processing...', 'success');
             closeUploadModal();
             refreshVideos();
+        } else if (response.status === 400) {
+            const err = await response.json().catch(() => ({}));
+            showToast(err.message || 'Upload rejected: content must be sports-related', 'error');
         } else {
             throw new Error('Upload failed');
         }

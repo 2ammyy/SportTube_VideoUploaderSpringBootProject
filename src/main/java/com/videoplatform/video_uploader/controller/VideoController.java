@@ -5,6 +5,7 @@ import com.videoplatform.video_uploader.repository.*;
 import com.videoplatform.video_uploader.service.AuthService;
 import com.videoplatform.video_uploader.service.ModerationService;
 import com.videoplatform.video_uploader.service.StorageService;
+import com.videoplatform.video_uploader.service.VideoContentClassifier;
 import com.videoplatform.video_uploader.service.VideoProcessingService;
 import com.videoplatform.video_uploader.service.VideoService;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,8 @@ public class VideoController {
     private final SavedVideoRepository savedVideoRepository;
     private final UserRepository userRepository;
     private final ModerationService moderationService;
+    private final VideoContentClassifier videoContentClassifier;
+
 
     // Inner class for upload response
     public static class UploadResponse {
@@ -97,7 +100,14 @@ public class VideoController {
             // 1. Save temp file to storage
             String tempPath = storageService.uploadTemp(file);
 
-            // 2. Create database record
+            // 2. Check if content is sports-related
+            if (!videoContentClassifier.isSportsContent(title, description, tempPath)) {
+                try { Files.deleteIfExists(Path.of(tempPath)); } catch (Exception ignored) {}
+                log.warn("Rejected non-sports video: title={}", title);
+                return ResponseEntity.badRequest().body(new UploadResponse(null, "REJECTED", "Video must be sports-related content"));
+            }
+
+            // 3. Create database record
             Video video = videoService.create(userId, file.getOriginalFilename(), tempPath, title, description, privacy);
 
             // 3. Send Kafka event for AI processing pipeline
