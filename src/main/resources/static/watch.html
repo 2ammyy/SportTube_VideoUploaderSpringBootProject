@@ -11,7 +11,10 @@
 <nav class="navbar">
     <div class="nav-brand" onclick="location.href='index.html'">SPORTTUBE</div>
     <div class="nav-search">
-        <input type="search" id="searchInput" placeholder="Search videos..." onkeyup="handleSearch(event)">
+        <div class="search-container">
+            <input type="search" id="searchInput" placeholder="Search videos..." onkeyup="handleSearch(event)">
+            <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
     </div>
     <div class="nav-links">
         <a href="index.html">Home</a>

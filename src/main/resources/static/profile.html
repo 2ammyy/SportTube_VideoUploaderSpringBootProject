@@ -13,7 +13,10 @@
     <div class="nav-search">
         <input type="text" name="fakeuser" style="display:none" tabindex="-1">
         <input type="password" name="fakepass" style="display:none" tabindex="-1">
-        <input type="search" id="searchInput" placeholder="🔍 Search videos..." onkeyup="searchVideos()" onkeydown="searchKeydown(event)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="0">
+        <div class="search-container">
+            <input type="search" id="searchInput" placeholder="🔍 Search videos..." onkeyup="searchVideos()" onkeydown="searchKeydown(event)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" tabindex="0">
+            <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
     </div>
     <div class="nav-links">
         <a href="index.html">Home</a>

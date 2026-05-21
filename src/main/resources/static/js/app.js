@@ -737,9 +737,143 @@ function searchKeydown(e) {
         const q = document.getElementById('searchInput').value.trim();
         if (q) {
             e.preventDefault();
+            saveSearchHistory(q);
             window.location.href = 'search.html?q=' + encodeURIComponent(q);
         }
     }
+    if (e.key === 'Escape') {
+        hideSearchDropdown();
+    }
+}
+
+// ============ Search History & Autocomplete ============
+const SEARCH_HISTORY_KEY = 'sporttube_search_history';
+const MAX_HISTORY = 10;
+
+function getSearchHistory() {
+    try {
+        return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+    } catch (e) { return []; }
+}
+
+function saveSearchHistory(query) {
+    if (!query || !query.trim()) return;
+    query = query.trim();
+    let history = getSearchHistory();
+    history = history.filter(h => h.toLowerCase() !== query.toLowerCase());
+    history.unshift(query);
+    if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+}
+
+function clearSearchHistory() {
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+    hideSearchDropdown();
+}
+
+let suggestTimeout = null;
+
+function showSearchDropdown() {
+    const dropdown = document.getElementById('searchDropdown');
+    if (!dropdown) return;
+    const input = document.getElementById('searchInput');
+    const val = input.value.trim();
+
+    if (val) {
+        fetchSearchSuggestions(val);
+        return;
+    }
+
+    const history = getSearchHistory();
+    if (history.length === 0) {
+        dropdown.classList.remove('show');
+        return;
+    }
+
+    let html = '<div class="dropdown-header">Recent Searches</div>';
+    for (const h of history) {
+        html += '<div class="dropdown-item" data-query="' + escapeXml(h) + '">' +
+            '<span class="item-icon">🕐</span>' +
+            '<span class="item-text">' + escapeXml(h) + '</span>' +
+        '</div>';
+    }
+    html += '<div class="clear-history">Clear history</div>';
+    dropdown.innerHTML = html;
+    dropdown.classList.add('show');
+
+    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const q = this.getAttribute('data-query');
+            input.value = q;
+            hideSearchDropdown();
+            saveSearchHistory(q);
+            window.location.href = 'search.html?q=' + encodeURIComponent(q);
+        });
+    });
+    var clearBtn = dropdown.querySelector('.clear-history');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            clearSearchHistory();
+        });
+    }
+}
+
+function hideSearchDropdown() {
+    const dropdown = document.getElementById('searchDropdown');
+    if (dropdown) dropdown.classList.remove('show');
+}
+
+function fetchSearchSuggestions(query) {
+    if (suggestTimeout) clearTimeout(suggestTimeout);
+    if (!query || query.length < 1) { showSearchDropdown(); return; }
+
+    suggestTimeout = setTimeout(() => {
+        fetch(API_BASE + '/videos/search?q=' + encodeURIComponent(query), {
+            headers: authToken ? { 'Authorization': 'Bearer ' + authToken } : {}
+        })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(videos => {
+            const dropdown = document.getElementById('searchDropdown');
+            if (!dropdown) return;
+            const input = document.getElementById('searchInput');
+            const currentVal = input.value.trim().toLowerCase();
+            if (currentVal !== query.toLowerCase().trim()) return;
+
+            if (videos.length === 0) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            const maxSuggestions = 5;
+            const suggestions = videos.slice(0, maxSuggestions);
+            let html = '<div class="dropdown-header">Suggestions</div>';
+            for (const v of suggestions) {
+                const title = v.title || v.originalFilename || 'Video';
+                const username = v.username || '';
+                html += '<div class="dropdown-item" data-query="' + escapeXml(title) + '">' +
+                    '<span class="item-icon">🔍</span>' +
+                    '<span class="item-text">' + escapeXml(title) + '</span>' +
+                    (username ? '<span class="item-meta">' + escapeXml(username) + '</span>' : '') +
+                '</div>';
+            }
+            dropdown.innerHTML = html;
+            dropdown.classList.add('show');
+
+            dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const q = this.getAttribute('data-query');
+                    input.value = q;
+                    hideSearchDropdown();
+                    saveSearchHistory(q);
+                    window.location.href = 'search.html?q=' + encodeURIComponent(q);
+                });
+            });
+        })
+        .catch(() => {});
+    }, 200);
 }
 
 function showCategory(category) {
@@ -1193,6 +1327,17 @@ if (!window.location.pathname.includes('search.html')) {
 } else {
     if (authToken) updateUserUI();
 }
+
+// Search dropdown event listeners (also for search.html)
+searchInput.addEventListener('focus', function() {
+    setTimeout(showSearchDropdown, 100);
+});
+searchInput.addEventListener('input', function() {
+    showSearchDropdown();
+});
+searchInput.addEventListener('blur', function() {
+    setTimeout(hideSearchDropdown, 200);
+});
 
 // ============ @Mention Autocomplete (for description fields) ============
 let mentionTimeout = null;
