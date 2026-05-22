@@ -4,6 +4,19 @@ A video-sharing platform built with **Spring Boot 3**, **Apache Kafka**, **MySQL
 
 ---
 
+
+
+
+
+https://github.com/user-attachments/assets/5fd3f2aa-3d52-4c5e-9ff6-ceb15682a8fb
+
+
+
+
+
+
+---
+
 ## Features
 
 - **Video Upload & Streaming** — Upload videos up to 500MB with drag-and-drop; stream directly in the browser
