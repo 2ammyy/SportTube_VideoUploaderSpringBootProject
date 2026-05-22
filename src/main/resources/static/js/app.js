@@ -81,6 +81,7 @@ function logout() {
     authToken = null;
     currentUser = null;
     updateUserUI();
+    document.getElementById('notificationBadge').style.display = 'none';
     showToast('Logged out', 'success');
     loadVideos();
 }
@@ -1320,12 +1321,17 @@ if (!window.location.pathname.includes('search.html')) {
     else {
         updateUserUI();
         loadLibSubscriptions();
+        loadUnreadCount();
     }
     loadRecommendations();
     setInterval(loadVideos, 15000);
     setInterval(() => { if (authToken) { loadRecommendations(); } }, 30000);
+    setInterval(() => { if (authToken) { loadUnreadCount(); } }, 30000);
 } else {
-    if (authToken) updateUserUI();
+    if (authToken) {
+        updateUserUI();
+        loadUnreadCount();
+    }
 }
 
 // Search dropdown event listeners (also for search.html)

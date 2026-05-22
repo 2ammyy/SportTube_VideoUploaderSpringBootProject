@@ -1069,6 +1069,7 @@ document.addEventListener('click', function(e) {
 
 if (authToken && currentUser) {
     updateNavUI();
+    if (typeof loadUnreadCount === 'function') loadUnreadCount();
 }
 
 setupMentionAutocomplete();
