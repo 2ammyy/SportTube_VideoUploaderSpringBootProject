@@ -96,7 +96,7 @@ public class VideoController {
 
         try {
             if (moderationService.isFlagged(title) || (description != null && !description.isEmpty() && moderationService.isFlagged(description))) {
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest().body(new UploadResponse(null, "REJECTED", "Video contains inappropriate content"));
             }
 
             // 1. Save temp file to storage

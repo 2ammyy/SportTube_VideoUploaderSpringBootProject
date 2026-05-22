@@ -551,7 +551,7 @@ async function uploadFile() {
             refreshVideos();
         } else if (response.status === 400) {
             const err = await response.json().catch(() => ({}));
-            showToast(err.message || 'Upload rejected: content must be sports-related', 'error');
+            showToast(err.message || 'Upload rejected', 'error');
         } else {
             throw new Error('Upload failed');
         }
