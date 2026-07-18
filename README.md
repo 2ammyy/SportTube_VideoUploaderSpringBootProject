@@ -1,4 +1,4 @@
-# SportTube - Event-Driven Video Upload Platform
+# SportTube - Event-Driven Sports Content Video Upload Platform
 
 A video-sharing platform built with **Spring Boot 3**, **Apache Kafka**, **MySQL**, and **FFmpeg**. Features include video upload with AI content moderation, user authentication, subscriptions, comments, likes, playlists, watch history, and an admin panel.
 
